@@ -6,7 +6,7 @@ ContextFling は、X で選択した文章を新しい ChatGPT Web の会話へ�
 
 ## 現在の状態
 
-v0.1.0 の実装と自動検証は完了しています。ただし、ChatGPT Web の DOM に依存する Experimental 機能のため、Chrome 実機での X→ChatGPT smoke test は未完了です。Chrome Web Store にはまだ公開していません。
+v0.1.1 の実装と自動検証（42 tests）は完了し、Chrome 実機で X→ChatGPT の自動送信成功を確認しています。ただし、ChatGPT Web の DOM に依存する Experimental 機能であり、Chrome Web Store にはまだ公開していません。v0.1.0 は `about:blank` 完了イベントの既知 race を含むため非推奨です。
 
 現行の主な挙動は次のとおりです。
 
@@ -36,11 +36,11 @@ npm run check:secrets
 
 ### GitHub Releases の Experimental prerelease
 
-v0.1.0 は [GitHub Releases](https://github.com/y4shiro/contextfling/releases) の Experimental prerelease として ZIP で配布します。配布 ZIP は `dist/` の内容をアーカイブ直下に置きます。つまり、解凍後に選択するフォルダの直下に `manifest.json` があり、`dist/` が一段入れ子にならない構成です。これは Chrome Web Store への公開とは別の配布です。
+v0.1.1 は [GitHub Releases の一覧](https://github.com/y4shiro/contextfling/releases) から、`Prerelease` と表示された Experimental prerelease の ZIP を手動配布します。配布 ZIP は `dist/` の内容をアーカイブ直下に置きます。つまり、解凍後に選択するフォルダの直下に `manifest.json` があり、`dist/` が一段入れ子にならない構成です。これは Chrome Web Store への公開とは別の配布です。v0.1.0 の ZIP は既知の race のため非推奨です。
 
 ダウンロードして手動で読み込む手順:
 
-1. GitHub Releases から v0.1.0 の ZIP をダウンロードします。
+1. GitHub Releases の一覧から `Prerelease` と表示された v0.1.1 の ZIP をダウンロードします。
 2. ZIP を解凍し、直下に `manifest.json` があるフォルダを確認します。
 3. Chrome で `chrome://extensions` を開き、Developer mode を有効にします。
 4. `Load unpacked` を押し、解凍したフォルダを選択します（ZIP ファイルや、その親フォルダではありません）。
@@ -56,7 +56,7 @@ GitHub Release の ZIP 配布は CWS 未公開の Experimental 配布です。CW
 4. X / Twitter 上の文章を選択し、右クリックの `ChatGPTで解説する` を実行します。
 5. 初回 preview で送信内容と宛先を確認し、同意するか拒否します。
 
-実機 smoke では実アカウントの機密情報を選択せず、ChatGPT のログイン済み・未ログイン、前面・背景表示、DOM 変更、clipboard fallback、同意撤回を確認してください。
+v0.1.1 では、実アカウントの機密情報を選択せずに X→ChatGPT の自動送信成功を実機確認済みです。追加の実機確認では、ChatGPT のログイン済み・未ログイン、前面・背景表示、DOM 変更、clipboard fallback、同意撤回を確認してください。
 
 ## 設計と制約
 

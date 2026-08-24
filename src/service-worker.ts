@@ -54,6 +54,24 @@ const MENU_DOCUMENT_URL_PATTERNS = [
   "https://www.twitter.com/*",
 ];
 
+export type TargetNavigationState =
+  | "ready"
+  | "pending"
+  | "unknown"
+  | "non-target";
+
+function classifyTargetNavigationUrl(
+  url: string | undefined,
+): TargetNavigationState {
+  if (typeof url !== "string" || url.trim().length === 0) {
+    return "unknown";
+  }
+  if (url === "about:blank") {
+    return "pending";
+  }
+  return url.startsWith(CHATGPT_URL) ? "ready" : "non-target";
+}
+
 const requestOperations = new Map<string, Promise<void>>();
 
 function getPendingStore(): PendingSessionStore {
@@ -442,7 +460,11 @@ async function processTargetTabOnceUnsafe(
   }
   try {
     const tab = await chrome.tabs.get(tabId);
-    if (tab.url && !tab.url.startsWith(CHATGPT_URL)) {
+    const navigationState = classifyTargetNavigationUrl(tab.url);
+    if (navigationState === "pending" || navigationState === "unknown") {
+      return;
+    }
+    if (navigationState === "non-target") {
       await removePending(payload.id);
       return;
     }
@@ -586,12 +608,25 @@ async function findPendingForTargetTab(
 async function handleTargetTabUpdated(
   tabId: number,
   changeInfo: chrome.tabs.OnUpdatedInfo,
+  tab: chrome.tabs.Tab,
 ): Promise<void> {
   if (changeInfo.status !== "complete") {
     return;
   }
+  const observedUrl = changeInfo.url ?? tab.url;
+  const navigationState = classifyTargetNavigationUrl(observedUrl);
+  if (navigationState === "pending" || navigationState === "unknown") {
+    return;
+  }
   const payload = await findPendingForTargetTab(tabId);
-  if (payload) {
+  if (!payload) {
+    return;
+  }
+  if (navigationState === "non-target") {
+    await removePending(payload.id);
+    return;
+  }
+  if (navigationState === "ready") {
     void processTargetTab(payload.id).catch(() => undefined);
   }
 }
@@ -764,8 +799,8 @@ function registerListeners(): void {
   chrome.contextMenus.onClicked.addListener((info, tab) => {
     void handleContextMenu(info, tab).catch(() => undefined);
   });
-  chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
-    void handleTargetTabUpdated(tabId, changeInfo).catch(() => undefined);
+  chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    void handleTargetTabUpdated(tabId, changeInfo, tab).catch(() => undefined);
   });
   chrome.tabs.onRemoved.addListener((tabId) => {
     void handleTabRemoved(tabId).catch(() => undefined);
@@ -790,6 +825,7 @@ if (typeof chrome !== "undefined" && chrome.runtime) {
 
 export {
   CHATGPT_URL,
+  classifyTargetNavigationUrl,
   isSettingsPageSender,
   MENU_DOCUMENT_URL_PATTERNS,
   MENU_ID,

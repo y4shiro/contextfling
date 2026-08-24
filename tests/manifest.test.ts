@@ -19,7 +19,7 @@ test("Manifest は MV3 の最小権限ベースラインを維持する", async 
   assert.ok(isRecord(manifest));
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.name, "ContextFling");
-  assert.equal(manifest.version, "0.1.0");
+  assert.equal(manifest.version, "0.1.1");
   assert.equal(manifest.minimum_chrome_version, "116");
 
   const background = manifest.background;

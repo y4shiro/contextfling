@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { classifyTargetNavigationUrl } from "../src/service-worker.js";
 import {
   approvePending,
   attachConsentTab,
@@ -14,6 +15,21 @@ import {
 } from "../src/state/machine.js";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+test("target navigation は about:blank/未確定を保留し ChatGPT URL だけを ready にする", () => {
+  assert.equal(classifyTargetNavigationUrl(undefined), "unknown");
+  assert.equal(classifyTargetNavigationUrl(""), "unknown");
+  assert.equal(classifyTargetNavigationUrl("about:blank"), "pending");
+  assert.equal(classifyTargetNavigationUrl("https://chatgpt.com/"), "ready");
+  assert.equal(
+    classifyTargetNavigationUrl("https://chatgpt.com/c/new"),
+    "ready",
+  );
+  assert.equal(
+    classifyTargetNavigationUrl("https://example.com/"),
+    "non-target",
+  );
+});
 
 test("v0.1 handoff の pending は同意 tab、target tab、adapter attempt を一度だけ記録する", () => {
   const initial = createPendingPayload({
@@ -67,6 +83,9 @@ test("service worker は v0.1 の権限境界と一回限り終端を実装す�
     /document\.cookie|\bfetch\s*\(|\beval\s*\(|new\s+Function/,
   );
   assert.match(source, /MENU_DOCUMENT_URL_PATTERNS/);
+  assert.match(source, /changeInfo\.url \?\? tab\.url/);
+  assert.match(source, /navigationState === "pending"/);
+  assert.match(source, /navigationState === "ready"/);
   assert.match(source, /https:\/\/x\.com\/\*"/);
   assert.match(source, /https:\/\/www\.x\.com\/\*"/);
   assert.match(source, /https:\/\/twitter\.com\/\*"/);

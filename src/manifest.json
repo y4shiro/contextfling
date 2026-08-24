@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ContextFling",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Xで選択した文章を、新しいChatGPT Web会話で解説します。",
   "minimum_chrome_version": "116",
   "permissions": ["activeTab", "contextMenus", "scripting", "storage"],

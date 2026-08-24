@@ -2,9 +2,22 @@
 
 このファイルは [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) の形式に沿って更新します。
 
+## 0.1.1 - 2026-08-24（GitHub Experimental prerelease）
+
+> 最新の手動 ZIP 配布。Chrome 実機で X→ChatGPT 自動送信成功を確認済み。Chrome Web Store 未公開。
+
+### Fixed
+
+- `about:blank` の完了イベントが ChatGPT への遷移前に発火した際、state 保存前の pending payload を早期削除する race を修正しました。`about:blank` は pending として保留し、目的 URL の完了後だけ処理します。
+
+### Verified
+
+- Chrome 実機で X の選択文から ChatGPT Web への自動送信成功を確認しました。
+- `npm test`: 42 tests passed。
+
 ## 0.1.0 - 2026-08-24（GitHub Experimental prerelease）
 
-> GitHub Releases で Experimental prerelease として ZIP 配布。Chrome Web Store 未公開。ChatGPT Web の実機 X→ChatGPT smoke test pending。
+> 既知の `about:blank` 完了イベント race を含むため非推奨。利用する場合は v0.1.1 を選択してください。Chrome Web Store 未公開。
 
 ### Added
 
