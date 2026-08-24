@@ -1,8 +1,53 @@
 node_modules/
 dist/
 coverage/
+tmp/
+temp/
+.cache/
+.turbo/
 *.log
+*.tmp
+*.temp
+*.swp
+*.swo
 .DS_Store
+Thumbs.db
+
+# Local editor and IDE state
+.idea/
+.vscode/
+*.iml
+
+# Local environment and package-manager credentials
 .env
 .env.*
 !.env.example
+.npmrc
+.pypirc
+
+# Private keys, certificates, tokens, and local credential exports
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.mobileprovision
+*.provisionprofile
+*.jwt
+*.token
+*.secret
+*.secrets
+id_rsa*
+id_ed25519*
+id_ecdsa*
+credentials*.json
+*credentials*.json
+client_secret*.json
+service-account*.json
+secrets*.json
+
+# Local databases and browser/application state
+*.db
+*.sqlite
+*.sqlite3

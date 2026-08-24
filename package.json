@@ -7,8 +7,9 @@
     "lint": "biome check .",
     "format": "biome format --write .",
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/*.test.ts",
-    "build": "node scripts/build.mjs"
+    "test": "node --test tests/*.test.*",
+    "build": "node scripts/build.mjs",
+    "check:secrets": "node scripts/check-secrets.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.10",
