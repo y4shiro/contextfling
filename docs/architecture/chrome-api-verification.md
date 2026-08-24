@@ -3,60 +3,85 @@
 > 確認日: 2026-08-24
 >
 > Working Name（仮称）: ContextFling
+>
+> 注意: 現行 `src/manifest.json` は permission/host permission を持たない。下記の v0.1 matrix は設計候補であり、実装・permission test・CWS/Privacy 更新なしに Manifest へ追加しない。
 
 ## 参照した Chrome 公式ページ
 
 - [activeTab](https://developer.chrome.com/docs/extensions/develop/concepts/activeTab)
 - [chrome.scripting](https://developer.chrome.com/docs/extensions/reference/api/scripting)
 - [chrome.contextMenus](https://developer.chrome.com/docs/extensions/reference/api/contextMenus)
-- [chrome.commands](https://developer.chrome.com/docs/extensions/reference/api/commands)
-- [chrome.tabs](https://developer.chrome.com/docs/extensions/reference/api/tabs)
+- [chrome.permissions](https://developer.chrome.com/docs/extensions/reference/api/permissions)
 - [chrome.storage](https://developer.chrome.com/docs/extensions/reference/api/storage)
+- [chrome.offscreen](https://developer.chrome.com/docs/extensions/reference/api/offscreen)
+- [Permissions list (`clipboardWrite`)](https://developer.chrome.com/docs/extensions/reference/permissions-list)
+- [Manifest file format (`minimum_chrome_version`, host permissions)](https://developer.chrome.com/docs/extensions/reference/manifest)
 
 ## 確認結果
 
 ### `activeTab`
 
-`activeTab` は、拡張機能 action のクリック、context menu 項目の選択、commands の keyboard shortcut など、ユーザーが明示的に開始する操作を契機に、現在の tab に一時的な host access を与える候補です。ページを常時監視する権限ではありません。
+Chrome 公式では、`activeTab` は action、context menu item、commands の keyboard shortcut、omnibox suggestion などの明示的な user gesture で現在 tab に一時的な host access を与える。発動中は対象 tab の URL、title、favicon を取得でき、`scripting` と併用すれば script/style injection が可能である。ページ遷移または tab close で access は失効する。
 
-Chrome 公式の `activeTab` 説明では、この一時的な access により、対象ページへの script/style injection と、機微な tab 情報へのアクセスが可能になるとされています。本プロジェクトでは、この公式説明を根拠に、発動中は `tab.url` を取得できるものとして扱います。ただし、具体的な API 呼び出しと後続 UI の経路は実装時に再検証します。
+v0.1 は X 上の context menu を起点にするため、X/Twitter の恒久 host permission を設けず `activeTab` を使う設計とする。発動条件、restricted page、実際の tab 情報は unpacked smoke で確認する。
 
 ### `scripting`
 
-`chrome.scripting` を使ってページへ script を注入するには `scripting` permission が必要です。対象ページへの access は、`activeTab` の一時許可または適切な `host_permissions` と組み合わせます。現行スキャフォールドには script 注入処理がないため、permission は追加していません。
+`chrome.scripting` には `scripting` permission と、対象ページの host access が必要である。host access は `activeTab` の一時 grant または host permission で満たせる。v0.1 では X extractor を activeTab の範囲で、ChatGPT adapter/banner を同意済み optional host の範囲で実行する。remote script、runtime import、任意 URL への注入は行わない。
 
 ### `contextMenus`
 
-Context menu を作成・管理するには `contextMenus` permission が必要です。context menu のユーザー選択は `activeTab` の発動契機になり得ますが、メニューを実際に追加する設計と対象 context は未確定です。
+`chrome.contextMenus` の create/update には `contextMenus` permission が必要である。v0.1 では `selection` context に `ChatGPTで解説する` 1 項目だけを登録し、menu invocation が `activeTab` の user gesture になることを利用する。現行 Manifest にはまだ追加していない。
 
-### `commands`
+### `storage` / `storage.session`
 
-Keyboard shortcut は Manifest の `commands` キーで宣言します。候補のショートカットは未確定で、現行 Manifest には `commands` を入れていません。commands によるユーザー操作も `activeTab` の発動契機として扱えるため、実装時は公式仕様と実機で再確認します。
+`chrome.storage` を使うには `storage` permission が必要である。`storage.session` は Chrome 102+ MV3 の in-memory storage で、ディスクへ永続化されず、extension が disable/reload/update されたときや browser restart でクリアされる。v0.1 は pending payload だけを session に置き、settings と consent version だけを local に置く。selection、URL、prompt の履歴は保存しない。
 
-### `tabs`
+### `offscreen`
 
-現行スキャフォールドは tab 情報を読んでいないため `tabs` permission は不要です。`activeTab` 発動中の `tab.url` と、Popup/side panel など後続の UI から取得する tab 情報は同じ条件とは限らないため、後続操作を設計する時点で `tabs` と host permissions の必要性を再評価します。
+Offscreen API は Chrome 109+ MV3 で、`offscreen` permission と同梱 static HTML document が必要である。offscreen document で利用できる extension API は `chrome.runtime` に制限されるため、clipboard 処理は offscreen 側、permission/state/結果の調整は Service Worker 側で messaging する。インストール済み extension では通常 profile ごとに一つの offscreen document しか開けない。
 
-### `storage`
+`runtime.getContexts()` は Chrome 116+ で offscreen document の存在確認に使える。older Chrome には `clients.matchAll()` fallback が公式ページに記載されているが、v0.1 の minimum Chrome は 116 を第一候補とし、採用前に実機検証する。Chrome 116 は設計候補であって、現行 Manifest の確定値ではない。
 
-現行コードは `chrome.storage` を使っていないため `storage` permission は不要です。設定、presets、handoff 履歴などを保存する機能を追加する場合に限り、保存先、データ分類、削除、CWS 開示と併せて検討します。
+### Optional permissions / host permissions
 
-### `host_permissions`
+`chrome.permissions.request()` は manifest の `optional_permissions` または `optional_host_permissions` に宣言した権限を、user gesture 内で runtime request する API である。v0.1 は初回 preview を表示し、同意画面のボタン handler から optional `https://chatgpt.com/*`、`offscreen`、`clipboardWrite` を要求する。request の前に await や別の非同期処理を入れず、拒否なら送信・保存を行わない。
 
-常時または特定 origin に対する access が必要な場合の候補ですが、初期方針はユーザー操作と `activeTab` で代替することです。`<all_urls>` は使用しません。特定 host が必要になった場合も、対象を限定し、公式仕様・CWS 審査影響・Privacy Impact を記録します。
+Chrome の permission request では origin の path は無視されるため、`https://chatgpt.com/*` は CWS と UI で ChatGPT origin に限定した host access として説明し、実機の permission prompt で確認する。X/Twitter の恒久 host permission は宣言しない。
 
-## 現時点の最小候補
+### `clipboardWrite`
 
-本体機能を設計する時の Proposed な最小候補は、次の 3 つです。
+公式 permissions list では `clipboardWrite` は Web Platform Clipboard API による cut/copy を許可し、ユーザーへの warning は clipboard を変更する旨である。v0.1 では DOM handoff が失敗したときだけ、同意済み permission で固定 prompt を一度だけ clipboard へ書く。clipboardRead は要求しない。書き込みに失敗した場合は ChatGPT tab の小さな banner で失敗を明示し、pending payload を削除する。
+
+### `tabs`、`notifications`、`alarms`
+
+v0.1 は `tabs` permission、X/Twitter の恒久 host permission、`notifications`、`alarms` を使わない。`tabs.create`、context menu callback の tab 情報、activeTab の一時 access、bounded operation timeout、tab close listener、`expiresAt` の検査で設計する。実装で追加の tab metadata が必要になった場合は、先に permission matrix と ADR を更新する。
+
+### action / settings
+
+Action API は Manifest の `action` key を必要とするが、action 自体は permission ではない。v0.1 の action click は即時 handoff や Popup ではなく、拡張機能内の設定・同意画面を開く。初回 preview と permission request はその画面の明示ボタンから行う。
+
+## v0.1 permission matrix
 
 ```text
-activeTab + scripting + contextMenus
-```
+Required candidate:
+  activeTab + contextMenus + scripting + storage
 
-これは確定 Manifest ではありません。action、commands、Popup、side panel の最終操作経路、対象ページの取得方法が決まった後に、必要性を permission 単位で確認します。`tabs`、`storage`、`host_permissions` は現時点では不要候補です。
+Optional candidate requested only after consent:
+  optional_host_permissions: https://chatgpt.com/*
+  optional_permissions: offscreen, clipboardWrite
+
+Not used:
+  tabs, X/Twitter host_permissions, notifications, alarms, clipboardRead,
+  cookies, history, webRequest, identity, <all_urls>
+```
 
 ## Skill との相違点
 
-project-local の `chrome-extensions` Skill は `tab.url` の取得に `tabs` permission が必要と記載しています。一方、上記の Chrome 公式 `activeTab` 説明は、ユーザー操作による一時的な access で機微な tab 情報へアクセスできるとしています。この点は公式を優先します。
+project-local の `chrome-extensions` Skill は `tab.url` に `tabs` permission が必要と記載する。一方、Chrome 公式の `activeTab` ページは、一時 host access 中に URL/title/favicon を取得できると明記する。この点は公式仕様を優先し、`tabs` を追加して解決しない。
 
-ただし、access の発動契機、Popup/side panel 内の後続ボタン、対象 tab の種類、Chrome バージョンによる差異は実装時に再確認します。`tabs` を追加して解決するのではなく、先に最小の再現テストと公式仕様を確認します。
+なお、`activeTab` は X の current tab には適するが、後から開いた ChatGPT tab の DOM access を与えない。そのため ChatGPT Web には、preview/明示同意後の optional host permission が別に必要である。Popup/side panel の後続操作、restricted page、Chrome version 差異は実装時の smoke test で再確認する。
+
+## 設計への適用
+
+この確認結果を反映した設計は [v0.1 design](v0.1-design.md)、判断と撤回条件は [ADR 0001](../adr/0001-experimental-chatgpt-web-handoff.md)、実装順序は [v0.1 implementation plan](v0.1-implementation-plan.md) にある。現行コードへ権限や DOM automation はまだ追加されていない。

@@ -10,6 +10,9 @@
 - `permissions`、`optional_permissions`、`host_permissions` を理由なしに追加しない。各権限の理由を `CHROMEWEBSTORE.md` と関連設計文書へ記録する。
 - `<all_urls>`、`cookies`、`history`、`bookmarks`、`webRequest` などの広い権限は追加しない。例外には必要性、代替案、Security Impact、Privacy Impact、Maintenance Impact を記載し、ADR 候補にする。
 - `activeTab` の発動条件、`tabs` と `host_permissions` の要否、`scripting` の対象範囲は Chrome 公式仕様を再確認する。Skill と公式が食い違う場合は、確認日と根拠を記録したうえで公式仕様を優先する。
+- v0.1 の Accepted design は required candidate を `activeTab`、`contextMenus`、`scripting`、`storage`、optional candidate を `https://chatgpt.com/*`、`offscreen`、`clipboardWrite` とする。ただし現行 Manifest は空であり、実装 PR、permission test、CWS/Privacy 更新を伴わずに追加しない。
+- optional host/permission は初回の正確な preview 後、同意画面のボタン操作からだけ要求する。`chrome.permissions.request()` の user gesture を await で先に消費しない。
+- X/Twitter には恒久 host permission を追加しない。`tabs`、`notifications`、`alarms`、`clipboardRead` は v0.1 で使用しない。
 
 ## 外部通信・データ利用
 
@@ -25,8 +28,10 @@
 
 ## ChatGPT と DOM
 
-- ChatGPT の非公開・非保証 DOM に content script を注入しない。
-- ChatGPT の入力欄を直接操作したり、送信ボタンを自動クリックしたり、Cookie を取得したりしない。
+- ChatGPT Web DOM automation は原則禁止であり、例外は [ADR 0001](docs/adr/0001-experimental-chatgpt-web-handoff.md) の v0.1 Experimental scope に限る。ADR の Accepted は実装成功や公式連携を意味しない。
+- 例外を実装する場合も、初回の送信内容・宛先・リスク preview、明示同意、`https://chatgpt.com/*` の optional host permission、selector/adapter 隔離、bounded timeout、retry 禁止、clipboard fallback、banner 表示、実機回帰テストを必須とする。
+- ChatGPT の Cookie、token、auth state、API key は取得しない。既存会話を使わず、毎回新規会話へ限定する。
+- ADR の scope 外の非公開 DOM automation、任意サイトの自動操作、同意を省略した入力・送信、送信結果不明時の再試行は追加しない。
 - handoff の方式を変更する場合は Destination adapter 内に依存を閉じ込め、公式サポート範囲、破壊リスク、ユーザー操作の明示性を記録する。
 
 ## Selector と untrusted input
@@ -40,14 +45,14 @@
 
 - セキュリティ、プライバシー、権限、外部通信、branding、公開範囲に影響する変更では、コードと同じ変更で関連文書を更新する。
 - 変更コストが高く複数の妥当な選択肢がある判断、または将来理由を問われる判断は `docs/adr/` に ADR 候補を作る。
-- 未検討の事項を `Accepted` にしない。判断前は `Proposed` または `Draft` とし、根拠・代替案・影響を残す。
+- 未検討の事項を `Accepted` にしない。判断前は `Proposed` または `Draft` とし、根拠・代替案・影響を残す。ADR 0001 は例外的に Accepted だが、Experimental・撤回可能・未実装として扱う。
 - Chrome Web Store に関係する変更は `CHROMEWEBSTORE.md` の listing、permission justification、privacy 開示、version history を確認する。
 
 ## Branding と公開
 
 - `ContextFling` は Working Name であり、正式名称・商標・アイコン・ストア文言は未確定である。
 - 製品名をドメインロジック、永続データ形式、公開プロトコル、責務を表す class/function 名へ不要に埋め込まない。branding は少数箇所へ集約する。
-- GitHub の初期リポジトリは Release Gate 完了まで Private とする。ユーザーから将来の公開許可はあるが、公開時期・LICENSE・OSS 文書・Security/Privacy review の完了を別途確認する。
+- GitHub のソースリポジトリ公開と拡張機能の公開リリースは別である。ユーザーの公開許可があっても、Chrome Web Store 提出は Release Gate 完了まで行わない。
 
 ## GLM 利用
 
