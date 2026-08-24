@@ -240,6 +240,58 @@ test("ChatGPT fixture はログイン済み、未ログイン、DOM変更の3状
   assert.doesNotMatch(changed, /data-testid="textbox"/);
 });
 
+test("初期から visible composer が複数なら書き込み・送信せず ambiguous で終端する", async () => {
+  const installed = installDom(`
+    <!doctype html>
+    <html>
+      <body>
+        <form>
+          <textarea data-testid="textbox"></textarea>
+          <button data-testid="send-button" type="button">Send 1</button>
+        </form>
+        <form>
+          <textarea data-testid="textbox"></textarea>
+          <button data-testid="send-button" type="button">Send 2</button>
+        </form>
+      </body>
+    </html>
+  `);
+  try {
+    const composers = Array.from(
+      installed.dom.window.document.querySelectorAll<HTMLTextAreaElement>(
+        'textarea[data-testid="textbox"]',
+      ),
+    );
+    const buttons = Array.from(
+      installed.dom.window.document.querySelectorAll<HTMLButtonElement>(
+        'button[data-testid="send-button"]',
+      ),
+    );
+    assert.equal(composers.length, 2);
+    assert.equal(buttons.length, 2);
+    let clickCount = 0;
+    for (const button of buttons) {
+      button.addEventListener("click", () => {
+        clickCount += 1;
+      });
+    }
+
+    const result = await runChatGptAdapter(adapterInput());
+
+    assert.equal(result.status, "selector-mismatch");
+    assert.equal(result.phase, "composer");
+    assert.equal(result.diagnostics.failureReason, "composer-ambiguous");
+    assert.equal(result.attempted, false);
+    assert.equal(result.diagnostics.composerCandidateCount, 2);
+    assert.equal(clickCount, 0);
+    for (const composer of composers) {
+      assert.equal(composer.value, "");
+    }
+  } finally {
+    installed.cleanup();
+  }
+});
+
 test("adapter は foreground で一度だけ送信し、非機密 diagnostics を返す", async () => {
   const markup = await readChatGptFixture("composer.html");
   const installed = installDom(markup);

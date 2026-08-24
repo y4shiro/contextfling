@@ -6,7 +6,7 @@ ContextFling は、X で選択した文章を新しい ChatGPT Web の会話へ�
 
 ## 現在の状態
 
-v0.1.1 の foreground 自動送信は Chrome 実機で成功を確認しています。一方、background では prompt 挿入後の自動送信と clipboard fallback が失敗しており、保証済みではありません。失敗経路を 63 tests で検証し、background 機能の撤回候補を [ADR 0003](docs/adr/0003-background-chatgpt-handoff-withdrawal.md) で検討中です。ChatGPT Web の DOM に依存する Experimental 機能であり、Chrome Web Store にはまだ公開していません。v0.1.0 は `about:blank` 完了イベントの既知 race を含むため非推奨です。
+v0.1.1 の foreground 自動送信は Chrome 実機で成功を確認しています。一方、background では prompt 挿入後の自動送信と clipboard fallback が失敗しており、保証済みではありません。失敗経路を 64 tests で検証し、background 機能の撤回候補を [ADR 0003](docs/adr/0003-background-chatgpt-handoff-withdrawal.md) で検討中です。ChatGPT Web の DOM に依存する Experimental 機能であり、Chrome Web Store にはまだ公開していません。v0.1.0 は `about:blank` 完了イベントの既知 race を含むため非推奨です。
 
 現行の主な挙動は次のとおりです。
 

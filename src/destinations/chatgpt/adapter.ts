@@ -463,17 +463,28 @@ export async function runChatGptAdapter(
     });
   };
 
-  let composer = await waitForElement(
+  const detectedComposer = await waitForElement(
     input.selectors.composer,
     timeoutMs,
     false,
   );
-  diagnosticsState.composerCandidateCount = collectVisible(
+  const initialComposerCandidates = collectVisible(
     document,
     input.selectors.composer,
     false,
-  ).length;
-  if (!composer) {
+  );
+  diagnosticsState.composerCandidateCount = initialComposerCandidates.length;
+  if (initialComposerCandidates.length > 1) {
+    return result(
+      "selector-mismatch",
+      "composer",
+      false,
+      "入力欄候補を一意に確認できませんでした。",
+      "composer-ambiguous",
+    );
+  }
+
+  if (!detectedComposer || initialComposerCandidates.length === 0) {
     if (hasVisibleLoginMarker()) {
       return result(
         "not-logged-in",
@@ -491,6 +502,8 @@ export async function runChatGptAdapter(
       "composer-timeout",
     );
   }
+
+  let composer = initialComposerCandidates[0] as Element;
 
   diagnosticsState.attachment.composer = document.contains(composer)
     ? "attached"
