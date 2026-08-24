@@ -34,7 +34,21 @@ npm run check:secrets
 
 `npm run build` は Service Worker、設定ページ、offscreen clipboard ページを bundle し、静的 HTML/CSS と Manifest を `dist/` へ配置します。`dist/` は生成物であり、Git 管理対象外です。
 
-### unpacked extension の確認
+### GitHub Releases の Experimental prerelease
+
+v0.1.0 は [GitHub Releases](https://github.com/y4shiro/contextfling/releases) の Experimental prerelease として ZIP で配布します。配布 ZIP は `dist/` の内容をアーカイブ直下に置きます。つまり、解凍後に選択するフォルダの直下に `manifest.json` があり、`dist/` が一段入れ子にならない構成です。これは Chrome Web Store への公開とは別の配布です。
+
+ダウンロードして手動で読み込む手順:
+
+1. GitHub Releases から v0.1.0 の ZIP をダウンロードします。
+2. ZIP を解凍し、直下に `manifest.json` があるフォルダを確認します。
+3. Chrome で `chrome://extensions` を開き、Developer mode を有効にします。
+4. `Load unpacked` を押し、解凍したフォルダを選択します（ZIP ファイルや、その親フォルダではありません）。
+5. X / Twitter 上の文章を選択し、右クリックの `ChatGPTで解説する` を実行します。
+
+GitHub Release の ZIP 配布は CWS 未公開の Experimental 配布です。CWS への提出・公開は、別の Release Gate を満たし、リリース単位でユーザーが明示承認した後に手動で行います。CI、Actions、agent、スクリプトから CWS の submit / publish は行いません。
+
+### ローカル unpacked extension の確認
 
 1. `npm run build` を実行します。
 2. Chrome で `chrome://extensions` を開き、Developer mode を有効にします。

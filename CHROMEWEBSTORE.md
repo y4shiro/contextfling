@@ -4,6 +4,12 @@
 >
 > v0.1.0 実装済み・Experimental。Chrome 実機 smoke は未完了、Chrome Web Store には未公開。
 
+## 配布方針
+
+v0.1.0 は [GitHub Releases](https://github.com/y4shiro/contextfling/releases) の Experimental prerelease として、`dist/` の内容をアーカイブ直下にした ZIP で手動配布します。GitHub Release の ZIP 配布は Chrome Web Store 公開とは別であり、現在 CWS には公開していません。
+
+Chrome Web Store への提出・公開は絶対に自動化しません。CI、Actions、agent、スクリプトから CWS の submit / publish を実装・実行せず、将来もリリース単位のユーザーの明示承認後に、ユーザーが手動操作します。
+
 ## ストア掲載情報
 
 **拡張機能名**: ContextFling（Working Name、正式名称と商標は提出前に再確認）
@@ -102,7 +108,7 @@ DOM 失敗時には、同意済みの prompt を clipboard に書く場合があ
 
 | バージョン | 日付 | 変更 | 状態 |
 | --- | --- | --- | --- |
-| 0.1.0 | 2026-08-24 | X selection、preview / consent、ChatGPT Web Experimental handoff、clipboard fallback、設定画面、最小権限 Manifest を実装。 | Unreleased / 実機 smoke pending |
+| 0.1.0 | 2026-08-24 | X selection、preview / consent、ChatGPT Web Experimental handoff、clipboard fallback、設定画面、最小権限 Manifest を実装。 | GitHub Experimental prerelease（ZIP） / CWS未公開 / 実機 smoke pending |
 | 0.0.0 | 2026-08-24 | Manifest V3 の初期スキャフォールド。 | Superseded |
 
 ## Review notes と Release Gate
@@ -110,6 +116,7 @@ DOM 失敗時には、同意済みの prompt を clipboard に書く場合があ
 - ChatGPT Web DOM automation は公式連携ではなく、DOM 変更、未ログイン、送信結果不明、利用条件、CWS 審査のリスクがあります。自動 retry はせず、clipboard fallback と banner を使います。
 - Chrome 116 以上での実機 X→ChatGPT smoke test（logged-in / logged-out、前面 / 背景、tab close、DOM failure、clipboard success / failure、同意撤回）が未完了です。
 - 正式名称、商標、掲載素材、Privacy Policy 公開 URL、連絡先、CWS data disclosure の最終入力が未完了です。
+- GitHub Release の ZIP は `dist/` の内容を直下にした手動配布物です。CWS への提出・公開を行う場合は、別の Release Gate とリリース単位のユーザー明示承認を完了し、ユーザーが手動操作します。
 - 実機 smoke と Security / Privacy review の結果により、Experimental scope を撤回または変更する可能性があります。変更時は ADR と関連文書を更新します。
 
 提出前に上記の未完了項目、`CHANGELOG.md`、LICENSE、CONTRIBUTING、Security、Privacy、権限 warning、ChatGPT / OpenAI の利用規約を確認します。

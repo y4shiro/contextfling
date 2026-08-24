@@ -4,6 +4,11 @@
 
 ContextFling v0.1.0 は実装済みの Experimental Chrome 拡張機能 OSS です。Chrome Web Store は未公開で、Chrome 実機 X→ChatGPT smoke も未完了です。実装済みの Source、Destination、権限、handoff 方式を変更する場合は、設計文書・ADR・受入条件を確認してください。
 
+## 配布と公開
+
+- v0.1.0 は GitHub Releases の Experimental prerelease として、`dist/` の内容をアーカイブ直下にした ZIP で手動配布します。GitHub Release の ZIP 配布と Chrome Web Store 公開は別です。
+- Chrome Web Store への提出・公開は自動化しません。CI、Actions、agent、スクリプトに CWS の submit / publish を追加・実行せず、将来もリリース単位のユーザーの明示承認後に、ユーザーが手動操作します。
+
 ## 変更前に確認すること
 
 - [CONTEXT.md](CONTEXT.md)、[AGENTS.md](AGENTS.md)、関連する architecture 文書を読む。
@@ -49,4 +54,4 @@ npm run build
 npm run check:secrets
 ```
 
-公開、Chrome Web Store への提出、外部サービスへの接続、データ削除やその他の破壊的操作は、Public Release Gate と明示的な承認なしに行いません。
+公開、Chrome Web Store への提出、外部サービスへの接続、データ削除やその他の破壊的操作は、Public Release Gate とリリース単位のユーザー明示承認なしに行いません。CWS の提出・公開は常にユーザーの手動操作です。

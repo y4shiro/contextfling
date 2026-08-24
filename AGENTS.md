@@ -52,7 +52,8 @@
 
 - `ContextFling` は Working Name であり、正式名称・商標・アイコン・ストア文言は未確定である。
 - 製品名をドメインロジック、永続データ形式、公開プロトコル、責務を表す class/function 名へ不要に埋め込まない。branding は少数箇所へ集約する。
-- GitHub のソースリポジトリ公開と拡張機能の公開リリースは別である。ユーザーの公開許可があっても、Chrome Web Store 提出は Release Gate 完了まで行わない。
+- GitHub のソースリポジトリ公開と拡張機能の公開リリースは別である。v0.1.0 は GitHub Releases の Experimental prerelease として、`dist/` の内容をアーカイブ直下にした ZIP で配布し、Chrome Web Store には公開しない。
+- Chrome Web Store への提出・公開は絶対に自動化しない。CI、Actions、agent、スクリプトから CWS の submit / publish を実装・実行せず、将来もリリース単位のユーザーの明示承認後に、ユーザーが手動操作する。
 
 ## GLM 利用
 

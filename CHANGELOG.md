@@ -2,9 +2,9 @@
 
 このファイルは [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) の形式に沿って更新します。
 
-## 0.1.0 - 2026-08-24（Unreleased）
+## 0.1.0 - 2026-08-24（GitHub Experimental prerelease）
 
-> Chrome Web Store 未公開。ChatGPT Web の実機 X→ChatGPT smoke test pending。Experimental build。
+> GitHub Releases で Experimental prerelease として ZIP 配布。Chrome Web Store 未公開。ChatGPT Web の実機 X→ChatGPT smoke test pending。
 
 ### Added
 
@@ -16,6 +16,7 @@
 - DOM / login / timeout / send-unknown 時の一度だけの clipboard fallback と固定 banner。
 - `storage.session` pending lifecycle と `storage.local` settings / consent version。
 - Manifest V3 の最小権限、設定ページ、offscreen clipboard document、fixture / unit / integration tests。
+- `dist/` の内容をアーカイブ直下にした GitHub Releases 用 ZIP の手動配布。Chrome Web Store への提出・公開は行わない。
 
 ### Security
 
