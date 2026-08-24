@@ -62,6 +62,15 @@
 - 判断できない場合は GLM を使わず、既存の担当エージェントで扱う。秘密情報や未公開データを外部 worker に渡さない。
 - GLM 実行後は `git status --short`、`git diff`、`git diff --cached`、HEAD・branch・remote、関連 test/lint/typecheck/build を独立に確認する。
 
+## Issue / Branch / Pull Request workflow
+
+- Issue-driven planning / Issue-linked branching / PR-driven execution を基本とし、Issue を Why / What / Requirements / Acceptance Criteria の正本とする。
+- 通常タスクでは Issue に紐づく working branch を作成し、可能なら branch 名に Issue 番号を含める。最初の意味のある commit 後、substantial implementation を続ける前を目安に Draft PR を作成する。
+- PR を実装・レビュー・検証の共有作業場所とし、今回修正する問題は PR review / comment に残す。scope 外の改善は新規 Issue へ分離する。
+- Review finding は妥当性を Requirements と実装に照らして検証してから修正し、Ready / Merge 前に必要な validation を行う。
+- Agent はユーザーの明示指示なしに Merge しない。
+- 詳細な手順、Issue / branch / PR の関連付け、引き継ぎ方法は [docs/development/agent-workflow.md](docs/development/agent-workflow.md) を参照する。
+
 ## 検証
 
 - 実装後は関連する format、lint、typecheck、test、build を実行し、未実行の検証と残存リスクを報告する。

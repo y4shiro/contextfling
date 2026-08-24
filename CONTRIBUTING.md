@@ -23,6 +23,24 @@ ContextFling v0.1.0 は実装済みの Experimental Chrome 拡張機能 OSS で�
 - ADR と architecture 文書は設計判断、制約、受入条件、検証証跡を記録します。`README.md` は公開概要、[CHROMEWEBSTORE.md](CHROMEWEBSTORE.md) は Chrome Web Store の metadata と開示内容の正本です。これらに active backlog を複製しません。
 - Issue の起票には [task template](.github/ISSUE_TEMPLATE/task.md) を使い、target milestone と完了条件を明記します。機密性のある security 報告は公開 Issue に書かず、[SECURITY.md](SECURITY.md) の手順へ誘導してください。
 
+## Agent-assisted development
+
+通常の変更は次の流れで進めます。
+
+```text
+Issue
+↓
+Issue-linked branch
+↓
+Draft PR
+↓
+Implementation / Review / Fix
+↓
+Human Merge
+```
+
+Issue は要件と受入条件、PR は実装・検証・レビューの状態を扱います。詳細な関連付け、引き継ぎ、validation、レビュー、Merge のルールは [Agent 支援開発ワークフロー](docs/development/agent-workflow.md) を参照してください。
+
 ## 開発環境
 
 Node.js 24 を第一候補、npm をパッケージマネージャーとします。
@@ -49,16 +67,6 @@ npm run check:secrets
 
 ## Pull Request
 
-PR は対象 Issue を `Fixes #123`、`Closes #123`、または `Refs #123` などで参照してください。PR には目的、変更範囲、完了条件への対応、設計上の判断、検証結果、未実行の検証、残存リスクを記載してください。権限・Privacy・Security・公開範囲に影響する変更は、関連文書と ADR の要否も明記します。
-
-少なくとも次の検証を通してください。
-
-```sh
-npm run lint
-npm run typecheck
-npm test
-npm run build
-npm run check:secrets
-```
+PR は [Pull Request template](.github/PULL_REQUEST_TEMPLATE.md) を使い、対象 Issue を `Fixes #123`、`Closes #123`、または `Refs #123` などで参照してください。目的、変更範囲、完了条件への対応、必要な設計上の判断、検証結果、未実行の検証、残存リスクを記載します。権限・Privacy・Security・公開範囲に影響する変更は、関連文書と ADR の要否も明記します。詳細は [Agent 支援開発ワークフロー](docs/development/agent-workflow.md) に集約しています。
 
 公開、Chrome Web Store への提出、外部サービスへの接続、データ削除やその他の破壊的操作は、Public Release Gate とリリース単位のユーザー明示承認なしに行いません。CWS の提出・公開は常にユーザーの手動操作です。
