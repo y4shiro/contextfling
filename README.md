@@ -34,6 +34,10 @@ npm run check:secrets
 
 `npm run build` は Service Worker、設定ページ、offscreen clipboard ページを bundle し、静的 HTML/CSS と Manifest を `dist/` へ配置します。`dist/` は生成物であり、Git 管理対象外です。
 
+### タスク管理
+
+タスク、bug、Release Gate は [GitHub Issues](https://github.com/y4shiro/contextfling/issues)、リリースや目標単位は [Milestone](https://github.com/y4shiro/contextfling/milestone/1) で管理します。開発手順とPRのルールは [CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。
+
 ### GitHub Releases の Experimental prerelease
 
 v0.1.1 は [GitHub Releases の一覧](https://github.com/y4shiro/contextfling/releases) から、`Prerelease` と表示された Experimental prerelease の ZIP を手動配布します。配布 ZIP は `dist/` の内容をアーカイブ直下に置きます。つまり、解凍後に選択するフォルダの直下に `manifest.json` があり、`dist/` が一段入れ子にならない構成です。これは Chrome Web Store への公開とは別の配布です。v0.1.0 の ZIP は既知の race のため非推奨です。

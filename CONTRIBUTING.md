@@ -16,6 +16,13 @@ ContextFling v0.1.0 は実装済みの Experimental Chrome 拡張機能 OSS で�
 - 実装済みの挙動と `README.md`、[PRIVACY.md](PRIVACY.md)、[CHROMEWEBSTORE.md](CHROMEWEBSTORE.md) の記述を同期させる。
 - 未確定の大きな設計判断は、勝手に確定せず `docs/adr/` の基準に従って提案する。
 
+## タスクと文書の正本
+
+- active な task、bug、Release Gate の状態、担当、優先度、blocker は [GitHub Issues](https://github.com/y4shiro/contextfling/issues) を正本とします。Issue の状態と担当を変更したときは、別の一覧を同期するのではなく Issue を更新してください。
+- [Milestone](https://github.com/y4shiro/contextfling/milestone/1) はリリースまたは目標単位のまとまりに使います。
+- ADR と architecture 文書は設計判断、制約、受入条件、検証証跡を記録します。`README.md` は公開概要、[CHROMEWEBSTORE.md](CHROMEWEBSTORE.md) は Chrome Web Store の metadata と開示内容の正本です。これらに active backlog を複製しません。
+- Issue の起票には [task template](.github/ISSUE_TEMPLATE/task.md) を使い、target milestone と完了条件を明記します。機密性のある security 報告は公開 Issue に書かず、[SECURITY.md](SECURITY.md) の手順へ誘導してください。
+
 ## 開発環境
 
 Node.js 24 を第一候補、npm をパッケージマネージャーとします。
@@ -42,7 +49,7 @@ npm run check:secrets
 
 ## Pull Request
 
-PR には目的、変更範囲、設計上の判断、テスト結果、未実行の検証、残存リスクを記載してください。権限・Privacy・Security・公開範囲に影響する変更は、関連文書と ADR の要否も明記します。
+PR は対象 Issue を `Fixes #123`、`Closes #123`、または `Refs #123` などで参照してください。PR には目的、変更範囲、完了条件への対応、設計上の判断、検証結果、未実行の検証、残存リスクを記載してください。権限・Privacy・Security・公開範囲に影響する変更は、関連文書と ADR の要否も明記します。
 
 少なくとも次の検証を通してください。
 

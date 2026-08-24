@@ -10,6 +10,8 @@ v0.1.1 は [GitHub Releases の一覧](https://github.com/y4shiro/contextfling/r
 
 Chrome Web Store への提出・公開は絶対に自動化しません。CI、Actions、agent、スクリプトから CWS の submit / publish を実装・実行せず、将来もリリース単位のユーザーの明示承認後に、ユーザーが手動操作します。
 
+> タスク管理上の役割: この文書は Chrome Web Store の metadata と開示内容の正本です。active な task / bug / Release Gate の状態・担当・優先度・blocker は [GitHub Issues](https://github.com/y4shiro/contextfling/issues) を正本とし、リリースまたは目標単位のまとまりは [v0.1.x hardening Milestone](https://github.com/y4shiro/contextfling/milestone/1) を参照してください。この文書に active backlog を複製しません。
+
 ## ストア掲載情報
 
 **拡張機能名**: ContextFling（Working Name、正式名称と商標は提出前に再確認）
