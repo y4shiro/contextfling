@@ -13,6 +13,46 @@ export type ChatGptAdapterStatus =
 
 export type ChatGptAdapterPhase = "validate" | "composer" | "send";
 
+export type ChatGptAdapterVisibilityState =
+  | "visible"
+  | "hidden"
+  | "prerender"
+  | "unloaded"
+  | "unknown";
+
+export type ChatGptAdapterFailureReason =
+  | "none"
+  | "invalid-input"
+  | "login-marker-visible"
+  | "composer-timeout"
+  | "composer-not-found"
+  | "composer-ambiguous"
+  | "composer-detached"
+  | "composer-write-unconfirmed"
+  | "container-not-found"
+  | "send-not-found"
+  | "send-ambiguous"
+  | "send-disabled"
+  | "send-detached"
+  | "send-control-invalid"
+  | "send-click-failed"
+  | "send-result-unknown"
+  | "post-submit-composer-detached";
+
+export type ChatGptAttachmentState = "attached" | "detached" | "unknown";
+
+export interface ChatGptAdapterDiagnostics {
+  readonly visibilityState: ChatGptAdapterVisibilityState;
+  readonly failureReason: ChatGptAdapterFailureReason;
+  readonly composerCandidateCount: number;
+  readonly sendCandidateCount: number;
+  readonly attachment: {
+    readonly composer: ChatGptAttachmentState;
+    readonly container: ChatGptAttachmentState;
+    readonly send: ChatGptAttachmentState;
+  };
+}
+
 export interface ChatGptAdapterInput {
   readonly prompt: string;
   readonly selectors: ChatGptSelectorRegistry;
@@ -25,6 +65,7 @@ export interface ChatGptAdapterResult {
   readonly phase: ChatGptAdapterPhase;
   readonly attempted: boolean;
   readonly detail: string;
+  readonly diagnostics: ChatGptAdapterDiagnostics;
 }
 
 /**
@@ -63,16 +104,73 @@ export function createChatGptAdapterInput(
 export async function runChatGptAdapter(
   input: ChatGptAdapterInput,
 ): Promise<ChatGptAdapterResult> {
+  const visibilityState = (): ChatGptAdapterVisibilityState => {
+    if (typeof document === "undefined") {
+      return "unknown";
+    }
+    const value = document.visibilityState;
+    return value === "visible" ||
+      value === "hidden" ||
+      value === "prerender" ||
+      value === "unloaded"
+      ? value
+      : "unknown";
+  };
+
+  const diagnosticsState: {
+    visibilityState: ChatGptAdapterVisibilityState;
+    composerCandidateCount: number;
+    sendCandidateCount: number;
+    attachment: {
+      composer: ChatGptAttachmentState;
+      container: ChatGptAttachmentState;
+      send: ChatGptAttachmentState;
+    };
+  } = {
+    visibilityState: visibilityState(),
+    composerCandidateCount: 0,
+    sendCandidateCount: 0,
+    attachment: {
+      composer: "unknown",
+      container: "unknown",
+      send: "unknown",
+    },
+  };
+
+  const snapshotDiagnostics = (
+    failureReason: ChatGptAdapterFailureReason,
+  ): ChatGptAdapterDiagnostics => ({
+    visibilityState: diagnosticsState.visibilityState,
+    failureReason,
+    composerCandidateCount: diagnosticsState.composerCandidateCount,
+    sendCandidateCount: diagnosticsState.sendCandidateCount,
+    attachment: {
+      composer: diagnosticsState.attachment.composer,
+      container: diagnosticsState.attachment.container,
+      send: diagnosticsState.attachment.send,
+    },
+  });
+
+  const result = (
+    status: ChatGptAdapterStatus,
+    phase: ChatGptAdapterPhase,
+    attempted: boolean,
+    detail: string,
+    failureReason: ChatGptAdapterFailureReason,
+  ): ChatGptAdapterResult => ({
+    status,
+    phase,
+    attempted,
+    detail,
+    diagnostics: snapshotDiagnostics(failureReason),
+  });
+
   const invalid = (
     phase: ChatGptAdapterPhase,
     detail: string,
     attempted = false,
-  ): ChatGptAdapterResult => ({
-    status: "invalid-input",
-    phase,
-    attempted,
-    detail,
-  });
+  ): ChatGptAdapterResult =>
+    result("invalid-input", phase, attempted, detail, "invalid-input");
 
   if (
     typeof input?.prompt !== "string" ||
@@ -94,21 +192,11 @@ export async function runChatGptAdapter(
     Math.min(5_000, Math.floor(input.postSubmitTimeoutMs ?? 1_500)),
   );
 
-  const result = (
-    status: ChatGptAdapterStatus,
-    phase: ChatGptAdapterPhase,
-    attempted: boolean,
-    detail: string,
-  ): ChatGptAdapterResult => ({ status, phase, attempted, detail });
-
   const isVisible = (element: Element): boolean => {
     if (!(element instanceof HTMLElement)) {
       return false;
     }
     if (element.hidden || element.getAttribute("aria-hidden") === "true") {
-      return false;
-    }
-    if (element instanceof HTMLButtonElement && element.disabled) {
       return false;
     }
     const style = globalThis.getComputedStyle(element);
@@ -126,31 +214,11 @@ export async function runChatGptAdapter(
     return element.getAttribute("aria-disabled") === "true";
   };
 
-  const findVisible = (
+  const collectVisible = (
+    root: ParentNode,
     selectors: readonly string[],
     enabledOnly: boolean,
-  ): Element | null => {
-    for (const selector of selectors) {
-      let candidates: NodeListOf<Element>;
-      try {
-        candidates = document.querySelectorAll(selector);
-      } catch {
-        continue;
-      }
-      for (const candidate of candidates) {
-        if (isVisible(candidate) && (!enabledOnly || !isDisabled(candidate))) {
-          return candidate;
-        }
-      }
-    }
-    return null;
-  };
-
-  const findUniqueVisible = (
-    root: Element,
-    selectors: readonly string[],
-    enabledOnly: boolean,
-  ): Element | null => {
+  ): Element[] => {
     const candidates = new Set<Element>();
     for (const selector of selectors) {
       let matches: NodeListOf<Element>;
@@ -165,6 +233,22 @@ export async function runChatGptAdapter(
         }
       }
     }
+    return [...candidates];
+  };
+
+  const findVisible = (
+    selectors: readonly string[],
+    enabledOnly: boolean,
+  ): Element | null => {
+    return collectVisible(document, selectors, enabledOnly)[0] ?? null;
+  };
+
+  const findUniqueVisible = (
+    root: Element,
+    selectors: readonly string[],
+    enabledOnly: boolean,
+  ): Element | null => {
+    const candidates = new Set(collectVisible(root, selectors, enabledOnly));
     if (candidates.size !== 1) {
       return null;
     }
@@ -328,7 +412,10 @@ export async function runChatGptAdapter(
     composer: Element,
     deadlineMs: number,
   ): Promise<boolean> => {
-    if (getComposerText(composer).trim().length === 0) {
+    if (
+      document.contains(composer) &&
+      getComposerText(composer).trim().length === 0
+    ) {
       return true;
     }
     const root = document.documentElement ?? document.body;
@@ -358,7 +445,15 @@ export async function runChatGptAdapter(
           finish(true);
         }
       });
-      const timer = globalThis.setTimeout(() => finish(false), deadlineMs);
+      const timer = globalThis.setTimeout(() => {
+        // Background tabs can delay observer delivery. Read the final DOM
+        // state once more at the deadline, but never treat a detached
+        // composer as a successful send.
+        finish(
+          document.contains(composer) &&
+            getComposerText(composer).trim().length === 0,
+        );
+      }, deadlineMs);
       observer.observe(root, {
         subtree: true,
         childList: true,
@@ -368,11 +463,16 @@ export async function runChatGptAdapter(
     });
   };
 
-  const composer = await waitForElement(
+  let composer = await waitForElement(
     input.selectors.composer,
     timeoutMs,
     false,
   );
+  diagnosticsState.composerCandidateCount = collectVisible(
+    document,
+    input.selectors.composer,
+    false,
+  ).length;
   if (!composer) {
     if (hasVisibleLoginMarker()) {
       return result(
@@ -380,6 +480,7 @@ export async function runChatGptAdapter(
         "composer",
         false,
         "ログイン後に利用できる入力欄を確認できませんでした。",
+        "login-marker-visible",
       );
     }
     return result(
@@ -387,6 +488,20 @@ export async function runChatGptAdapter(
       "composer",
       false,
       "入力欄の検出がタイムアウトしました。",
+      "composer-timeout",
+    );
+  }
+
+  diagnosticsState.attachment.composer = document.contains(composer)
+    ? "attached"
+    : "detached";
+  if (!document.contains(composer)) {
+    return result(
+      "selector-mismatch",
+      "composer",
+      false,
+      "入力欄が DOM から切り離されました。",
+      "composer-detached",
     );
   }
 
@@ -396,6 +511,7 @@ export async function runChatGptAdapter(
       "composer",
       false,
       "入力欄への標準 DOM event による入力に失敗しました。",
+      "composer-write-unconfirmed",
     );
   }
 
@@ -409,6 +525,19 @@ export async function runChatGptAdapter(
       "send",
       false,
       "入力欄に関連する送信コンテナを確認できませんでした。",
+      "container-not-found",
+    );
+  }
+  diagnosticsState.attachment.container = document.contains(sendContainer)
+    ? "attached"
+    : "detached";
+  if (!document.contains(sendContainer)) {
+    return result(
+      "selector-mismatch",
+      "send",
+      false,
+      "送信コンテナが DOM から切り離されました。",
+      "send-detached",
     );
   }
   const sendButton = await waitForUniqueVisible(
@@ -417,26 +546,181 @@ export async function runChatGptAdapter(
     timeoutMs,
     true,
   );
+  const initialSendCandidates = collectVisible(
+    sendContainer,
+    input.selectors.sendButton,
+    false,
+  );
+  diagnosticsState.sendCandidateCount = initialSendCandidates.length;
   if (!sendButton) {
+    const failureReason: ChatGptAdapterFailureReason =
+      initialSendCandidates.length > 1
+        ? "send-ambiguous"
+        : initialSendCandidates.length === 1 &&
+            isDisabled(initialSendCandidates[0] as Element)
+          ? "send-disabled"
+          : "send-not-found";
     return result(
       "selector-mismatch",
       "send",
       false,
       "送信ボタンを一意に確認できませんでした。",
+      failureReason,
     );
   }
-  if (!(sendButton instanceof HTMLElement)) {
+
+  // Let same-turn framework work (for example a controlled-input update or a
+  // hydration replacement queued by the page) settle before the final,
+  // synchronous control lookup. This is not a retry and does not dispatch a
+  // second input or send operation.
+  await Promise.resolve();
+
+  // The page can replace the React composer/form after input events. Resolve
+  // all three controls again immediately before click so a stale detached
+  // node can never receive the one allowed send operation.
+  const currentComposerCandidates = collectVisible(
+    document,
+    input.selectors.composer,
+    false,
+  );
+  diagnosticsState.composerCandidateCount = currentComposerCandidates.length;
+  if (currentComposerCandidates.length === 0) {
+    diagnosticsState.attachment.composer = document.contains(composer)
+      ? "attached"
+      : "detached";
+    return result(
+      "selector-mismatch",
+      "composer",
+      false,
+      "送信直前に入力欄を再確認できませんでした。",
+      "composer-not-found",
+    );
+  }
+  if (currentComposerCandidates.length > 1) {
+    return result(
+      "selector-mismatch",
+      "composer",
+      false,
+      "送信直前に入力欄を一意に確認できませんでした。",
+      "composer-ambiguous",
+    );
+  }
+  const currentComposer = currentComposerCandidates[0] as Element;
+  if (currentComposer !== composer && !document.contains(composer)) {
+    diagnosticsState.attachment.composer = "detached";
+  }
+  composer = currentComposer;
+  diagnosticsState.attachment.composer = document.contains(composer)
+    ? "attached"
+    : "detached";
+  if (!document.contains(composer)) {
+    return result(
+      "selector-mismatch",
+      "composer",
+      false,
+      "送信直前に入力欄が DOM から切り離されました。",
+      "composer-detached",
+    );
+  }
+  if (getComposerText(composer) !== input.prompt) {
+    return result(
+      "selector-mismatch",
+      "composer",
+      false,
+      "送信直前に入力欄の状態を確認できませんでした。",
+      "composer-write-unconfirmed",
+    );
+  }
+
+  const currentSendContainer =
+    composer.closest("form") ?? composer.parentElement;
+  if (!currentSendContainer) {
+    diagnosticsState.attachment.container = "unknown";
+    return result(
+      "selector-mismatch",
+      "send",
+      false,
+      "送信直前に入力欄に関連する送信コンテナを確認できませんでした。",
+      "container-not-found",
+    );
+  }
+  diagnosticsState.attachment.container = document.contains(
+    currentSendContainer,
+  )
+    ? "attached"
+    : "detached";
+  if (!document.contains(currentSendContainer)) {
+    return result(
+      "selector-mismatch",
+      "send",
+      false,
+      "送信直前に送信コンテナが DOM から切り離されました。",
+      "send-detached",
+    );
+  }
+
+  const currentSendCandidates = collectVisible(
+    currentSendContainer,
+    input.selectors.sendButton,
+    false,
+  );
+  diagnosticsState.sendCandidateCount = currentSendCandidates.length;
+  if (currentSendCandidates.length === 0) {
+    return result(
+      "selector-mismatch",
+      "send",
+      false,
+      "送信直前に送信ボタンを確認できませんでした。",
+      "send-not-found",
+    );
+  }
+  if (currentSendCandidates.length > 1) {
+    return result(
+      "selector-mismatch",
+      "send",
+      false,
+      "送信直前に送信ボタンを一意に確認できませんでした。",
+      "send-ambiguous",
+    );
+  }
+  const currentSendButton = currentSendCandidates[0] as Element;
+  diagnosticsState.attachment.send = document.contains(currentSendButton)
+    ? "attached"
+    : "detached";
+  if (
+    !document.contains(currentSendButton) ||
+    !currentSendContainer.contains(currentSendButton)
+  ) {
+    return result(
+      "selector-mismatch",
+      "send",
+      false,
+      "送信直前に送信ボタンが DOM から切り離されました。",
+      "send-detached",
+    );
+  }
+  if (isDisabled(currentSendButton)) {
+    return result(
+      "selector-mismatch",
+      "send",
+      false,
+      "送信直前に送信ボタンが無効化されました。",
+      "send-disabled",
+    );
+  }
+  if (!(currentSendButton instanceof HTMLElement)) {
     return result(
       "selector-mismatch",
       "send",
       false,
       "送信ボタンが標準 DOM 要素ではありません。",
+      "send-control-invalid",
     );
   }
 
   let clickDispatched = false;
   try {
-    sendButton.click();
+    currentSendButton.click();
     clickDispatched = true;
   } catch {
     return result(
@@ -444,6 +728,7 @@ export async function runChatGptAdapter(
       "send",
       true,
       "送信ボタンの操作結果を確認できませんでした。",
+      "send-click-failed",
     );
   }
 
@@ -453,17 +738,33 @@ export async function runChatGptAdapter(
       "send",
       true,
       "送信ボタンの操作結果を確認できませんでした。",
+      "send-click-failed",
     );
   }
 
   const cleared = await waitForComposerToClear(composer, postSubmitTimeoutMs);
+  diagnosticsState.attachment.composer = document.contains(composer)
+    ? "attached"
+    : "detached";
   if (!cleared) {
+    const failureReason: ChatGptAdapterFailureReason = document.contains(
+      composer,
+    )
+      ? "send-result-unknown"
+      : "post-submit-composer-detached";
     return result(
       "send-unknown",
       "send",
       true,
       "送信操作後も入力欄の状態を確定できませんでした。再送信は行いません。",
+      failureReason,
     );
   }
-  return result("sent", "send", true, "送信操作を一度だけ実行しました。");
+  return result(
+    "sent",
+    "send",
+    true,
+    "送信操作を一度だけ実行しました。",
+    "none",
+  );
 }

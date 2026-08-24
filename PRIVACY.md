@@ -6,7 +6,7 @@
 
 ## 状態と適用範囲
 
-ContextFling v0.1.0 は実装済みの Experimental Chrome 拡張機能 OSS です。Chrome 実機での X→ChatGPT smoke test は未完了で、Chrome Web Store には公開していません。この文書は、現在のリポジトリにある実装のデータフローを説明します。正式名称、公開 URL、連絡先は CWS 提出前に確定します。
+ContextFling v0.1.1 は実装済みの Experimental Chrome 拡張機能 OSS です。Chrome 実機では foreground 自動送信に成功しましたが、background の自動送信と clipboard fallback は失敗しており未保証です。Chrome Web Store には公開していません。この文書は、現在のリポジトリにある実装のデータフローを説明します。正式名称、公開 URL、連絡先は CWS 提出前に確定します。
 
 ## データフロー
 
@@ -48,6 +48,12 @@ TTL は 10 分です。`expiresAt` 到達後は論理的に失効し、処理対
 ChatGPT Web の入力欄が見つからない、未ログイン、DOM が変更された、timeout、送信結果が不明などの場合、自動再送は行いません。同意済みの prompt を同梱 offscreen document から Clipboard API へ一度だけ書き、ChatGPT tab 内の固定 banner で手動貼り付けを案内します。
 
 ContextFling は clipboard を読みません。ユーザーが上書きするまで、OS や他のアプリが clipboard 内容を保持する可能性があります。clipboard fallback を望まない場合は、権限を許可せず preview を拒否してください。
+
+## 失敗診断
+
+adapter / clipboard failure を切り分けるため、Service Worker のローカル開発者 console にだけ非機密 category を出力します。対象は adapter status / phase / typed failure reason、`document.visibilityState`、composer / send 候補数、DOM attachment、clipboard failure / lifecycle category、banner 表示成否です。
+
+selection、sanitized URL、prompt、clipboard 内容、Cookie、token、認証情報、ChatGPT account 情報、request ID、tab ID、例外本文は診断へ含めません。診断は `storage` に保存せず、開発者 backend、analytics、telemetry、外部サービスへ送信しません。
 
 ## 取得しないデータ・使わない機能
 

@@ -2,7 +2,7 @@
 
 > 最終更新: 2026-08-24
 >
-> v0.1.1 実装済み・Experimental。Chrome 実機で X→ChatGPT 自動送信成功を確認済み、Chrome Web Store には未公開。
+> v0.1.1 実装済み・Experimental。Chrome 実機では foreground 自動送信成功、background の自動送信 / clipboard fallback 失敗を確認。Chrome Web Store には未公開。
 
 ## 配布方針
 
@@ -94,6 +94,8 @@ DOM 失敗時には、同意済みの prompt を clipboard に書く場合があ
 
 **信用力・融資目的に使うか**: いいえ。
 
+失敗経路の typed diagnostics はローカルの Service Worker 開発者 console にだけ出力し、selection、URL、prompt、clipboard 内容、account / request / tab 情報、例外本文を含めません。保存、analytics、telemetry、開発者 backend への送信は行いません。
+
 ## Privacy Policy とサポート
 
 **Privacy Policy URL**: 未確定。CWS 提出前に、公開 URL と [PRIVACY.md](PRIVACY.md) の内容を一致させます。
@@ -110,14 +112,15 @@ DOM 失敗時には、同意済みの prompt を clipboard に書く場合があ
 
 | バージョン | 日付 | 変更 | 状態 |
 | --- | --- | --- | --- |
-| 0.1.1 | 2026-08-24 | `about:blank` 完了イベント race を修正。Chrome 実機で X→ChatGPT 自動送信成功を確認。42 tests。 | GitHub Experimental prerelease（ZIP） / CWS未公開 |
+| 0.1.1 | 2026-08-24 | `about:blank` 完了イベント race を修正。Chrome 実機で foreground の X→ChatGPT 自動送信成功を確認。リリース時 42 tests。 | GitHub Experimental prerelease（ZIP） / CWS未公開 |
 | 0.1.0 | 2026-08-24 | X selection、preview / consent、ChatGPT Web Experimental handoff、clipboard fallback、設定画面、最小権限 Manifest を実装。 | Deprecated（`about:blank` 完了イベント race 既知） / CWS未公開 |
 | 0.0.0 | 2026-08-24 | Manifest V3 の初期スキャフォールド。 | Superseded |
 
 ## Review notes と Release Gate
 
 - ChatGPT Web DOM automation は公式連携ではなく、DOM 変更、未ログイン、送信結果不明、利用条件、CWS 審査のリスクがあります。自動 retry はせず、clipboard fallback と banner を使います。
-- Chrome 116 以上での X→ChatGPT 自動送信成功は実機確認済みです。logged-out、前面 / 背景、tab close、DOM failure、clipboard success / failure、同意撤回の追加シナリオは確認を継続します。
+- Chrome 116 以上で foreground の X→ChatGPT 自動送信成功は実機確認済みです。background は prompt 挿入まで成功しましたが、自動送信と clipboard fallback は失敗し、固定 banner と retry / 二重送信なしを確認しました。typed diagnostics による原因分離、logged-out、tab close、DOM failure、clipboard success / failure、同意撤回の追加確認を継続します。
+- background 機能の撤回候補は ADR 0003 で Proposed として比較中であり、CWS 提出前に foreground 限定、paste-only、no-op を含む方針を確定します。
 - 正式名称、商標、掲載素材、Privacy Policy 公開 URL、連絡先、CWS data disclosure の最終入力が未完了です。
 - GitHub Release の ZIP は `dist/` の内容を直下にした手動配布物です。CWS への提出・公開を行う場合は、別の Release Gate とリリース単位のユーザー明示承認を完了し、ユーザーが手動操作します。
 - 追加実機シナリオと Security / Privacy review の結果により、Experimental scope を撤回または変更する可能性があります。変更時は ADR と関連文書を更新します。

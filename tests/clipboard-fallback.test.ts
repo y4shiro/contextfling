@@ -3,6 +3,17 @@ import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import {
+  type ClipboardFallbackRequest,
+  createClipboardFallbackCoordinator,
+  type OffscreenClipboardPort,
+} from "../src/handoff/fallback.js";
+import {
+  type ClipboardWriteResponse,
+  installClipboardMessageHandler,
+  type RuntimeMessagePort,
+  writeTextOnce,
+} from "../src/offscreen/clipboard.js";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -58,4 +69,302 @@ test("clipboard failure は prompt を保存せず banner へ明示的に渡す"
   assert.match(source, /bannerShown/);
   assert.match(source, /writeText\(\{/);
   assert.doesNotMatch(source, /storage\.local|storage\.session/);
+});
+
+function fallbackRequest(requestId = "request-1"): ClipboardFallbackRequest {
+  return {
+    requestId,
+    tabId: 7,
+    prompt: "opaque test payload",
+    cause: "selector-mismatch",
+  };
+}
+
+function bannerRecorder(): {
+  readonly calls: Array<{ tabId: number; kind: string }>;
+  readonly port: {
+    show(tabId: number, input: { kind: string }): Promise<void>;
+  };
+} {
+  const calls: Array<{ tabId: number; kind: string }> = [];
+  return {
+    calls,
+    port: {
+      async show(tabId, input): Promise<void> {
+        calls.push({ tabId, kind: input.kind });
+      },
+    },
+  };
+}
+
+function coordinator(offscreen: OffscreenClipboardPort) {
+  return createClipboardFallbackCoordinator({
+    offscreen,
+    banner: bannerRecorder().port,
+  });
+}
+
+test("offscreen 未作成のまま create が失敗した場合は write せず typed category を返す", async () => {
+  let writeCalls = 0;
+  let closeCalls = 0;
+  const fallback = coordinator({
+    hasDocument: async () => false,
+    createDocument: async () => {
+      throw new Error("create rejected");
+    },
+    closeDocument: async () => {
+      closeCalls += 1;
+    },
+    writeText: async () => {
+      writeCalls += 1;
+      return { ok: true };
+    },
+  });
+
+  const result = await fallback.run(fallbackRequest());
+
+  assert.equal(result.status, "clipboard-failed");
+  assert.equal(result.reason, "offscreen-not-created");
+  assert.equal(result.failureCategory, "offscreen-not-created");
+  assert.equal(writeCalls, 0);
+  assert.equal(closeCalls, 0);
+});
+
+test("offscreen create race は既存 document を閉じず、write は一度だけ行う", async () => {
+  let hasCalls = 0;
+  let createCalls = 0;
+  let writeCalls = 0;
+  let closeCalls = 0;
+  const fallback = coordinator({
+    hasDocument: async () => {
+      hasCalls += 1;
+      return hasCalls > 1;
+    },
+    createDocument: async () => {
+      createCalls += 1;
+      throw new Error("already exists");
+    },
+    closeDocument: async () => {
+      closeCalls += 1;
+    },
+    writeText: async () => {
+      writeCalls += 1;
+      return { ok: true };
+    },
+  });
+
+  const result = await fallback.run(fallbackRequest());
+
+  assert.equal(result.status, "copied");
+  assert.equal(result.reason, undefined);
+  assert.equal(result.failureCategory, undefined);
+  assert.equal(result.lifecycleCategory, "offscreen-create-race");
+  assert.equal(createCalls, 1);
+  assert.equal(writeCalls, 1);
+  assert.equal(closeCalls, 0);
+});
+
+test("create 成功後に document を確認できなければ write せず close する", async () => {
+  let hasCalls = 0;
+  let writeCalls = 0;
+  let closeCalls = 0;
+  const fallback = coordinator({
+    hasDocument: async () => {
+      hasCalls += 1;
+      return false;
+    },
+    createDocument: async () => undefined,
+    closeDocument: async () => {
+      closeCalls += 1;
+    },
+    writeText: async () => {
+      writeCalls += 1;
+      return { ok: true };
+    },
+  });
+
+  const result = await fallback.run(fallbackRequest());
+
+  assert.equal(result.status, "clipboard-failed");
+  assert.equal(result.reason, "offscreen-unavailable-after-create");
+  assert.equal(hasCalls, 2);
+  assert.equal(writeCalls, 0);
+  assert.equal(closeCalls, 1);
+});
+
+test("clipboard unavailable と write rejection は response category をそのまま区別する", async () => {
+  let response: {
+    readonly ok: false;
+    readonly reason: "clipboard-unavailable" | "write-failed";
+  } = {
+    ok: false,
+    reason: "clipboard-unavailable",
+  };
+  const fallback = coordinator({
+    hasDocument: async () => true,
+    createDocument: async () => undefined,
+    closeDocument: async () => undefined,
+    writeText: async () => response,
+  });
+
+  const unavailable = await fallback.run(fallbackRequest("unavailable"));
+  response = { ok: false, reason: "write-failed" };
+  const rejected = await fallback.run(fallbackRequest("rejected"));
+
+  assert.equal(unavailable.reason, "clipboard-unavailable");
+  assert.equal(unavailable.failureCategory, "clipboard-unavailable");
+  assert.equal(rejected.reason, "write-failed");
+  assert.equal(rejected.failureCategory, "write-failed");
+});
+
+test("response 不在 typed union または runtime message reject の場合は response-failed", async () => {
+  let rejectWrite = false;
+  const fallback = coordinator({
+    hasDocument: async () => true,
+    createDocument: async () => undefined,
+    closeDocument: async () => undefined,
+    writeText: async () => {
+      if (rejectWrite) {
+        throw new Error("runtime response unavailable");
+      }
+      return undefined as never;
+    },
+  });
+
+  const malformed = await fallback.run(fallbackRequest("malformed"));
+  rejectWrite = true;
+  const rejected = await fallback.run(fallbackRequest("response-rejected"));
+
+  assert.equal(malformed.reason, "response-failed");
+  assert.equal(malformed.failureCategory, "response-failed");
+  assert.equal(rejected.reason, "response-failed");
+  assert.equal(rejected.failureCategory, "response-failed");
+});
+
+test("created document の close failure は write 後の terminal category として返す", async () => {
+  let hasCalls = 0;
+  let writeCalls = 0;
+  let closeCalls = 0;
+  const fallback = coordinator({
+    hasDocument: async () => {
+      hasCalls += 1;
+      return hasCalls > 1;
+    },
+    createDocument: async () => undefined,
+    closeDocument: async () => {
+      closeCalls += 1;
+      throw new Error("close rejected");
+    },
+    writeText: async () => {
+      writeCalls += 1;
+      return { ok: true };
+    },
+  });
+
+  const result = await fallback.run(fallbackRequest());
+
+  assert.equal(result.status, "copied");
+  assert.equal(result.reason, "close-failed");
+  assert.equal(result.failureCategory, "close-failed");
+  assert.equal(result.cleanupFailureCategory, "close-failed");
+  assert.equal(writeCalls, 1);
+  assert.equal(closeCalls, 1);
+});
+
+test("coordinator は concurrent fallback を直列化し、各 request の write を一度だけ行う", async () => {
+  let activeWrites = 0;
+  let maximumActiveWrites = 0;
+  let writeCalls = 0;
+  const fallback = coordinator({
+    hasDocument: async () => true,
+    createDocument: async () => undefined,
+    closeDocument: async () => undefined,
+    writeText: async () => {
+      writeCalls += 1;
+      activeWrites += 1;
+      maximumActiveWrites = Math.max(maximumActiveWrites, activeWrites);
+      await new Promise<void>((resolve) => setTimeout(resolve, 5));
+      activeWrites -= 1;
+      return { ok: true };
+    },
+  });
+
+  await Promise.all([
+    fallback.run(fallbackRequest("serial-1")),
+    fallback.run(fallbackRequest("serial-2")),
+  ]);
+
+  assert.equal(maximumActiveWrites, 1);
+  assert.equal(writeCalls, 2);
+});
+
+test("offscreen writer は clipboard unavailable と write rejection を公開し、handler は duplicate request を拒否する", async () => {
+  assert.deepEqual(await writeTextOnce("", undefined), {
+    ok: false,
+    reason: "clipboard-unavailable",
+  });
+  assert.deepEqual(
+    await writeTextOnce("opaque test payload", {
+      writeText: async () => {
+        throw new Error("clipboard rejected");
+      },
+    }),
+    { ok: false, reason: "write-failed" },
+  );
+
+  type Listener = Parameters<RuntimeMessagePort["onMessage"]["addListener"]>[0];
+  let listener: Listener | undefined;
+  let writes = 0;
+  const responses: ClipboardWriteResponse[] = [];
+  const removeCalls: Listener[] = [];
+  const cleanup = installClipboardMessageHandler(
+    {
+      onMessage: {
+        addListener(value) {
+          listener = value;
+        },
+        removeListener(value) {
+          removeCalls.push(value);
+        },
+      },
+    },
+    {
+      writeText: async () => {
+        writes += 1;
+      },
+    },
+  );
+  assert.ok(listener);
+  assert.equal(
+    listener?.(
+      {
+        type: "contextfling:clipboard-write",
+        requestId: "duplicate-check",
+        text: "opaque test payload",
+      },
+      {},
+      (response) => responses.push(response),
+    ),
+    true,
+  );
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(
+    listener?.(
+      {
+        type: "contextfling:clipboard-write",
+        requestId: "duplicate-check",
+        text: "opaque test payload",
+      },
+      {},
+      (response) => responses.push(response),
+    ),
+    false,
+  );
+  assert.equal(writes, 1);
+  assert.deepEqual(responses.at(-1), {
+    ok: false,
+    reason: "duplicate-request",
+  });
+  cleanup();
+  assert.equal(removeCalls.length, 1);
 });

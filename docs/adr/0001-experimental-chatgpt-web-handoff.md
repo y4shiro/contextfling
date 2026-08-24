@@ -1,6 +1,6 @@
 # ADR 0001: 実験的 ChatGPT Web handoff
 
-> この ADR の `Context` と `Decision` は、2026-08-24 の実装前レビューで行った判断履歴です。現在の状態は v0.1.0 実装済み・自動検証済みですが、Chrome 実機 X→ChatGPT smoke test と Chrome Web Store 公開は未完了です。
+> この ADR の `Context` と `Decision` は、2026-08-24 の実装前レビューで行った判断履歴です。現在は v0.1.1 の foreground 自動送信に実機成功しましたが、background の自動送信と clipboard fallback は失敗しており、撤回候補を [ADR 0003](0003-background-chatgpt-handoff-withdrawal.md) で検討中です。Chrome Web Store には未公開です。
 
 - Status: Accepted
 - Scope: v0.1

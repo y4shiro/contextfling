@@ -6,7 +6,7 @@ ContextFling は、X で選択した文章を新しい ChatGPT Web の会話へ�
 
 ## 現在の状態
 
-v0.1.1 の実装と自動検証（42 tests）は完了し、Chrome 実機で X→ChatGPT の自動送信成功を確認しています。ただし、ChatGPT Web の DOM に依存する Experimental 機能であり、Chrome Web Store にはまだ公開していません。v0.1.0 は `about:blank` 完了イベントの既知 race を含むため非推奨です。
+v0.1.1 の foreground 自動送信は Chrome 実機で成功を確認しています。一方、background では prompt 挿入後の自動送信と clipboard fallback が失敗しており、保証済みではありません。失敗経路を 63 tests で検証し、background 機能の撤回候補を [ADR 0003](docs/adr/0003-background-chatgpt-handoff-withdrawal.md) で検討中です。ChatGPT Web の DOM に依存する Experimental 機能であり、Chrome Web Store にはまだ公開していません。v0.1.0 は `about:blank` 完了イベントの既知 race を含むため非推奨です。
 
 現行の主な挙動は次のとおりです。
 
@@ -68,7 +68,7 @@ GitHub Release の ZIP 配布は CWS 未公開の Experimental 配布です。CW
 4. X / Twitter 上の文章を選択し、右クリックの `ChatGPTで解説する` を実行します。
 5. 初回 preview で送信内容と宛先を確認し、同意するか拒否します。
 
-v0.1.1 では、実アカウントの機密情報を選択せずに X→ChatGPT の自動送信成功を実機確認済みです。追加の実機確認では、ChatGPT のログイン済み・未ログイン、前面・背景表示、DOM 変更、clipboard fallback、同意撤回を確認してください。
+v0.1.1 では、実アカウントの機密情報を選択せずに foreground の X→ChatGPT 自動送信成功を実機確認済みです。background では prompt 挿入後の自動送信と clipboard fallback が失敗し、固定 banner、retry なし、二重送信なしを確認しています。追加確認では、非機密 diagnostics だけを使い、foreground / background、ChatGPT のログイン済み・未ログイン、DOM 変更、clipboard success / failure、同意撤回を確認してください。
 
 ## 設計と制約
 

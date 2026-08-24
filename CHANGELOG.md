@@ -2,9 +2,23 @@
 
 このファイルは [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) の形式に沿って更新します。
 
+## Unreleased
+
+### Changed
+
+- ChatGPT adapter の非機密 typed diagnostics、click 直前の attached DOM 再検証、background throttling を考慮した post-submit 最終確認を追加しました。send control の操作は最大一回で、retry は追加していません。
+- Clipboard fallback の offscreen lifecycle、write、response、cleanup failure を typed category で分離しました。clipboard write は最大一回で、prompt / clipboard 内容を診断へ含めません。
+- background 自動送信の撤回候補を ADR 0003（Proposed）として比較し、現時点では foreground 限定を推奨しました。現行設定は変更していません。
+
+### Verified
+
+- jsdom fixture で foreground、hidden document、delayed hydration、controlled input 未反映、DOM replacement / detached、send control 不在 / disabled / duplicate、synthetic click no-op、send-unknown を検証しました。
+- offscreen 未作成 / create race / create 後 unavailable、clipboard unavailable / write rejection、response failure、close failure、同時 fallback、Service Worker restart 相当の cleanup を検証しました。
+- `npm test`: 63 tests passed。
+
 ## 0.1.1 - 2026-08-24（GitHub Experimental prerelease）
 
-> 最新の手動 ZIP 配布。Chrome 実機で X→ChatGPT 自動送信成功を確認済み。Chrome Web Store 未公開。
+> 最新の手動 ZIP 配布。Chrome 実機で foreground の X→ChatGPT 自動送信成功を確認済み。Chrome Web Store 未公開。
 
 ### Fixed
 
@@ -12,7 +26,7 @@
 
 ### Verified
 
-- Chrome 実機で X の選択文から ChatGPT Web への自動送信成功を確認しました。
+- Chrome 実機で foreground の X 選択文から ChatGPT Web への自動送信成功を確認しました。
 - `npm test`: 42 tests passed。
 
 ## 0.1.0 - 2026-08-24（GitHub Experimental prerelease）

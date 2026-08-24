@@ -4,7 +4,7 @@
 >
 > Working Name（仮称）: ContextFling
 
-> 現状更新: v0.1.0 実装済み。自動検証済み、Chrome 実機 X→ChatGPT smoke 未完了、Chrome Web Store 未公開。
+> 現状更新: v0.1.1 実装済み。foreground 自動送信は実機成功、background の自動送信 / clipboard fallback は実機失敗、Chrome Web Store 未公開。
 
 この文書は、立ち上げ時の要求と Accepted Experimental design を分類し、実装前の境界を監査可能にするための記録です。詳細な責務、state machine、permission matrix、受入条件は [v0.1 設計書](v0.1-design.md)、判断の根拠と撤回条件は [ADR 0001](../adr/0001-experimental-chatgpt-web-handoff.md) を参照します。
 
@@ -20,7 +20,7 @@
 - required permission は `activeTab`、`contextMenus`、`scripting`、`storage`。optional permission/host は `https://chatgpt.com/*`、`offscreen`、`clipboardWrite` で、preview 後の設定ページ approve button の同期 click handler が `chrome.permissions.request()` を直接呼ぶ。promise 解決後に approve runtime message を送り、Service Worker が `chrome.permissions.contains()` で bundle 一式を最終確認する。storage 操作は Service Worker 経由とする。
 - pending payload は `storage.session`、settings/consent version だけは `storage.local` に置き、履歴を残さず終端で削除する。
 - ChatGPT Web の入力・自動送信は公式連携ではない Experimental adapter。selector 隔離、bounded observer/timeout、retry 禁止、offscreen clipboard fallback、ChatGPT tab banner を必須とする。
-- 現行 Manifest は v0.1.0 の permission matrix を実装済みで、context menu、設定 / preview、X URL 抽出、ChatGPT adapter、clipboard fallback、pending cleanup も実装済みである。Chrome 実機 smoke と CWS 公開は未完了である。
+- 現行 Manifest は v0.1.1 の permission matrix を実装済みで、context menu、設定 / preview、X URL 抽出、ChatGPT adapter、clipboard fallback、pending cleanup も実装済みである。foreground は実機成功、background は prompt 挿入後の自動送信 / clipboard fallback が失敗しており、CWS 公開前の blocker である。
 
 ## 強い default
 
@@ -64,7 +64,7 @@
 
 ## 不足論点
 
-- Chrome 実機での X / ChatGPT logged-in・logged-out、selector、送信結果不明、clipboard 成否、tab close、同意撤回の smoke。
+- Chrome 実機では foreground 自動送信成功、background の prompt 挿入、自動送信 / clipboard fallback 失敗、固定 banner、retry / 二重送信なしを確認済み。typed diagnostics による原因分離、logged-out、selector 変更、clipboard success / failure、tab close、同意撤回は未完了。
 - ChatGPT/OpenAI の利用条件と CWS 審査で Experimental DOM automation を扱う根拠。
 - 正式なデータ分類、ユーザーの個人情報・機密情報を選択しない注意、保持 / 削除の実機検証。
 - 公開者情報、Privacy Policy 公開 URL、正式名称、アクセシビリティ、スクリーンショット。

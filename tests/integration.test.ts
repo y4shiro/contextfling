@@ -4,7 +4,10 @@ import { dirname, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { classifyTargetNavigationUrl } from "../src/service-worker.js";
+import {
+  classifyAdapterAttemptDisposition,
+  classifyTargetNavigationUrl,
+} from "../src/service-worker.js";
 import {
   approvePending,
   attachConsentTab,
@@ -74,7 +77,7 @@ test("service worker は v0.1 の権限境界と一回限り終端を実装す�
   assert.match(source, /contexts:\s*\["selection"\]/);
   assert.match(source, /permissions\.contains\(OPTIONAL_PERMISSION_BUNDLE\)/);
   assert.match(source, /markAdapterAttempted\(/);
-  assert.match(source, /adapterAttemptedAt !== undefined/);
+  assert.match(source, /classifyAdapterAttemptDisposition\(payload\)/);
   assert.match(source, /func: runChatGptAdapter/);
   assert.match(source, /func: showChatGptBanner/);
   assert.doesNotMatch(source, /chrome\.tabs\.query/);
@@ -152,9 +155,52 @@ test("adapter attempt marker と予期しない queue/target 例外は再送を�
     resolve(projectRoot, "src/service-worker.ts"),
     "utf8",
   );
-  assert.match(source, /payload\.adapterAttemptedAt !== undefined/);
+  assert.match(source, /disposition === "cleanup-attempted"/);
   assert.match(
     source,
     /async function processTargetTabOnce\([\s\S]*?catch \{[\s\S]*?removePending\(requestIdValue\)/,
+  );
+});
+
+test("Service Worker restart 相当の attempt marker は再実行せず cleanup へ進む", () => {
+  const initial = createPendingPayload({
+    id: "request-restart-cleanup",
+    sourceUrl: "https://x.com/alice/status/42",
+    selectionText: "非機密 fixture",
+    prompt: "固定 fixture prompt",
+    createdAt: 1_000,
+    expiresAt: 20_000,
+  });
+  const queued = approvePending(initial, 1_001);
+  assert.ok(queued);
+  const claimed = claimPending(queued, "claim-restart", 20, 1_002);
+  assert.ok(claimed);
+  const attempted = markAdapterAttempted(claimed, 1_003);
+  assert.ok(attempted);
+
+  assert.equal(classifyAdapterAttemptDisposition(claimed), "attempt");
+  assert.equal(
+    classifyAdapterAttemptDisposition(attempted),
+    "cleanup-attempted",
+  );
+});
+
+test("Service Worker diagnostics は本文・識別子を出力対象にしない", async () => {
+  const source = await readFile(
+    resolve(projectRoot, "src/service-worker.ts"),
+    "utf8",
+  );
+  const adapterStart = source.indexOf("function reportAdapterDiagnostic");
+  const fallbackStart = source.indexOf("async function runFallback");
+  const diagnosticSource = source.slice(adapterStart, fallbackStart);
+
+  assert.ok(adapterStart >= 0);
+  assert.ok(fallbackStart > adapterStart);
+  assert.match(diagnosticSource, /status: result\.status/);
+  assert.match(diagnosticSource, /failureCategory/);
+  assert.match(diagnosticSource, /visibilityState/);
+  assert.doesNotMatch(
+    diagnosticSource,
+    /selectionText|sourceUrl|prompt|clipboardText|requestId|tabId|\.detail/,
   );
 });

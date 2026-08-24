@@ -2,8 +2,10 @@ import type { ChatGptAdapterStatus } from "../destinations/chatgpt/adapter.js";
 import type { ChatGptBannerInput } from "../destinations/chatgpt/banner.js";
 import {
   CLIPBOARD_WRITE_MESSAGE,
+  type ClipboardWriteFailure,
   type ClipboardWriteRequest,
   type ClipboardWriteResponse,
+  isClipboardWriteResponse,
 } from "../offscreen/clipboard.js";
 
 export interface OffscreenClipboardPort {
@@ -34,10 +36,34 @@ export type ClipboardFallbackStatus =
   | "clipboard-failed"
   | "invalid-request";
 
+/**
+ * Non-sensitive categories for the one-shot fallback boundary.
+ *
+ * `ClipboardWriteFailure` describes the runtime message / Clipboard API side;
+ * the additional categories describe the offscreen document lifecycle. The
+ * union is deliberately finite so callers cannot accidentally surface a
+ * thrown error or user data as a diagnostic reason.
+ */
+export type ClipboardFallbackFailureCategory =
+  | "invalid-request"
+  | "offscreen-not-created"
+  | "offscreen-unavailable-after-create"
+  | ClipboardWriteFailure
+  | "close-failed";
+
+export type ClipboardFallbackLifecycleCategory = "offscreen-create-race";
+
 export interface ClipboardFallbackResult {
   readonly status: ClipboardFallbackStatus;
   readonly bannerShown: boolean;
-  readonly reason?: string;
+  /** A stable, non-sensitive category for the terminal operation. */
+  readonly reason?: ClipboardFallbackFailureCategory;
+  /** Explicit alias for consumers that need to distinguish it from prose. */
+  readonly failureCategory?: ClipboardFallbackFailureCategory;
+  /** A close failure can accompany a primary write failure. */
+  readonly cleanupFailureCategory?: "close-failed";
+  /** A recovered lifecycle condition that did not itself fail the write. */
+  readonly lifecycleCategory?: ClipboardFallbackLifecycleCategory;
 }
 
 function bannerKindFor(
@@ -70,6 +96,8 @@ export function createClipboardFallbackCoordinator(
     request: ClipboardFallbackRequest,
   ): Promise<ClipboardFallbackResult> => {
     if (
+      typeof request?.requestId !== "string" ||
+      typeof request?.prompt !== "string" ||
       request.requestId.length === 0 ||
       request.requestId.length > 128 ||
       !Number.isSafeInteger(request.tabId) ||
@@ -79,67 +107,96 @@ export function createClipboardFallbackCoordinator(
       return {
         status: "invalid-request",
         bannerShown: false,
-        reason: "fallback request is empty or malformed",
+        reason: "invalid-request",
+        failureCategory: "invalid-request",
       };
     }
 
-    let shouldClose = false;
+    let createdDocument = false;
     let status: ClipboardFallbackStatus = "clipboard-failed";
-    let reason: string | undefined;
+    let failureCategory: ClipboardFallbackFailureCategory | undefined;
+    let cleanupFailureCategory: "close-failed" | undefined;
+    let creationFailureCategory:
+      | "offscreen-not-created"
+      | "offscreen-unavailable-after-create"
+      | undefined;
+    let lifecycleCategory: ClipboardFallbackLifecycleCategory | undefined;
+
+    const hasDocument = async (): Promise<boolean> => {
+      try {
+        return (await dependencies.offscreen.hasDocument()) === true;
+      } catch {
+        return false;
+      }
+    };
+
     try {
-      let available = await dependencies.offscreen.hasDocument();
-      shouldClose = available;
+      let available = await hasDocument();
       if (!available) {
         try {
           await dependencies.offscreen.createDocument();
-          shouldClose = true;
+          createdDocument = true;
+          // Chrome resolves createDocument after the initial page load. A
+          // single confirmation is enough; polling here would add an
+          // unbounded lifecycle dependency without making the write safer.
+          available = await hasDocument();
+          if (!available) {
+            creationFailureCategory = "offscreen-unavailable-after-create";
+          }
         } catch {
           // Another extension event may have created the same document between
           // the check and create call. Confirm before reporting failure.
-          available = await dependencies.offscreen.hasDocument();
-          if (!available) {
-            reason = "offscreen document could not be created";
+          available = await hasDocument();
+          if (available) {
+            lifecycleCategory = "offscreen-create-race";
+          } else {
+            creationFailureCategory = "offscreen-not-created";
           }
         }
       }
-      if (!available && shouldClose) {
-        available = await dependencies.offscreen.hasDocument();
-      }
       if (!available) {
-        return {
-          status,
-          bannerShown: await showBanner(
-            dependencies.banner,
-            request.tabId,
-            bannerKindFor(status, request.cause),
-          ),
-          ...(reason ? { reason } : {}),
-        };
-      }
-
-      const response = await dependencies.offscreen.writeText({
-        type: CLIPBOARD_WRITE_MESSAGE,
-        requestId: request.requestId,
-        text: request.prompt,
-      });
-      if (response.ok) {
-        status = "copied";
+        // No write is attempted when the static document cannot be confirmed.
       } else {
-        reason = response.reason;
+        let response: ClipboardWriteResponse;
+        try {
+          response = await dependencies.offscreen.writeText({
+            type: CLIPBOARD_WRITE_MESSAGE,
+            requestId: request.requestId,
+            text: request.prompt,
+          });
+        } catch {
+          // A rejected runtime.sendMessage has no response to inspect.
+          failureCategory = "response-failed";
+          response = { ok: false, reason: "response-failed" };
+        }
+        if (isClipboardWriteResponse(response)) {
+          if (response.ok) {
+            status = "copied";
+          } else {
+            failureCategory = response.reason;
+          }
+        } else {
+          failureCategory = "response-failed";
+        }
       }
     } catch {
-      reason = "clipboard fallback failed";
+      // hasDocument failures are intentionally collapsed to a lifecycle
+      // category; the thrown value may contain browser or page details.
+      failureCategory ??= "offscreen-not-created";
     } finally {
-      if (shouldClose) {
+      if (createdDocument) {
         try {
           await dependencies.offscreen.closeDocument();
         } catch {
           // Closing is best effort. The prompt is never retried because the
           // write operation above has already reached a terminal state.
+          cleanupFailureCategory = "close-failed";
         }
       }
     }
 
+    const category =
+      failureCategory ?? creationFailureCategory ?? cleanupFailureCategory;
     const bannerShown = await showBanner(
       dependencies.banner,
       request.tabId,
@@ -148,7 +205,9 @@ export function createClipboardFallbackCoordinator(
     return {
       status,
       bannerShown,
-      ...(reason ? { reason } : {}),
+      ...(category ? { reason: category, failureCategory: category } : {}),
+      ...(cleanupFailureCategory ? { cleanupFailureCategory } : {}),
+      ...(lifecycleCategory ? { lifecycleCategory } : {}),
     };
   };
 

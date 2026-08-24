@@ -6,7 +6,7 @@
 
 ## 現在の状態
 
-v0.1.0 のコード、設定画面、X URL 抽出、固定 prompt、ChatGPT Web adapter、clipboard fallback、state machine、テスト、build は実装済みです。Chrome 実機での X→ChatGPT smoke test は未完了で、Chrome Web Store には未公開です。ChatGPT Web DOM automation は公式連携ではない Experimental scope です。
+v0.1.1 のコード、設定画面、X URL 抽出、固定 prompt、ChatGPT Web adapter、clipboard fallback、state machine、テスト、build は実装済みです。Chrome 実機では foreground 自動送信に成功しましたが、background は prompt 挿入後の自動送信と clipboard fallback に失敗しており、未保証です。Chrome Web Store には未公開で、ChatGPT Web DOM automation は公式連携ではない Experimental scope です。
 
 ## 目的
 
@@ -61,7 +61,9 @@ X / Twitter の恒久 host permission、`tabs`、`notifications`、`alarms`、`c
 
 ## 未完了・既知の制限
 
-- Chrome 実機で X selection menu、ChatGPT ログイン済み / 未ログイン、DOM 変更、前面 / 背景、tab close、同意撤回、clipboard fallback の smoke test が未完了です。
+- Chrome 実機で foreground 自動送信は成功済みです。background では prompt 挿入まで成功し、自動送信と clipboard fallback は失敗、固定 banner と retry / 二重送信なしを確認しました。adapter / clipboard の typed diagnostics を使った再確認、logged-out、DOM 変更、tab close、同意撤回は未完了です。
+- 非機密 diagnostics は Service Worker の開発者 console にだけ出力し、adapter status / phase / typed reason / visibility / DOM attachment /候補数と clipboard category だけを含みます。selection、URL、prompt、clipboard 内容、account 情報、request ID、tab ID は含めず、保存・送信もしません。
+- background 自動送信の維持、foreground 限定、paste-only、no-op は [ADR 0003](docs/adr/0003-background-chatgpt-handoff-withdrawal.md) で Proposed として比較中です。現行設定は Human maintainer の判断前に変更していません。
 - ChatGPT Web の DOM は公式安定 API ではなく、selector 変更で自動入力が失敗する可能性があります。
 - 正式名称、商標、CWS 掲載文言、Privacy Policy 公開 URL、サポート窓口、スクリーンショット、公開時期は未確定です。
 - v0.1.0 の Experimental scope を変更する場合は [ADR 0001](docs/adr/0001-experimental-chatgpt-web-handoff.md) と [v0.1 設計書](docs/architecture/v0.1-design.md) を更新します。

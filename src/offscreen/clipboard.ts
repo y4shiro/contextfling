@@ -26,6 +26,37 @@ export type ClipboardWriteResponse =
   | ClipboardWriteSuccess
   | ClipboardWriteError;
 
+const CLIPBOARD_WRITE_FAILURES: readonly ClipboardWriteFailure[] = [
+  "invalid-request",
+  "duplicate-request",
+  "clipboard-unavailable",
+  "write-failed",
+  "response-failed",
+];
+
+/**
+ * Validate a response crossing the runtime-message boundary.
+ *
+ * The service worker treats an absent or malformed response as a terminal
+ * response failure. Keeping this check in the offscreen module gives the
+ * fallback coordinator the same typed boundary without exposing any payload
+ * contents in diagnostics.
+ */
+export function isClipboardWriteResponse(
+  value: unknown,
+): value is ClipboardWriteResponse {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return (
+    record.ok === true ||
+    (record.ok === false &&
+      typeof record.reason === "string" &&
+      CLIPBOARD_WRITE_FAILURES.includes(record.reason as ClipboardWriteFailure))
+  );
+}
+
 export interface ClipboardWriter {
   writeText(text: string): Promise<void>;
 }
@@ -70,7 +101,7 @@ export async function writeTextOnce(
   text: string,
   clipboard: ClipboardWriter | undefined,
 ): Promise<ClipboardWriteResponse> {
-  if (text.length === 0 || !clipboard) {
+  if (typeof text !== "string" || text.length === 0 || !clipboard) {
     return { ok: false, reason: "clipboard-unavailable" };
   }
   try {

@@ -20,4 +20,8 @@ Architecture Decision Record（ADR）は、変更コストが高く、複数の�
 
 - [0002: X 単体ポストのページ右クリック実行](0002-single-post-context-menu.md) — 単体ポスト URL の通常ページ右クリック、status ID と一致する主投稿本文の抽出、既存 handoff の再利用を採用。新規 permission、X / Twitter の恒久 host permission、常駐 content script、action icon 即時実行、X 内常設 button は対象外。Accepted は仕様選定を示し、実装完了・自動検証・実機確認・公開承認を意味しない。
 
-v0.1.0 の本体機能は実装済みですが、ADR 0001 は Experimental で、Chrome 実機 smoke と Chrome Web Store 公開は未完了です。次の判断は、未検討の事項を勝手に `Accepted` にせず、`Proposed` または `Draft` として根拠・代替案・影響を記録します。
+### Proposed
+
+- [0003: background ChatGPT handoff の撤回候補](0003-background-chatgpt-handoff-withdrawal.md) — Issue #6 の background 部分失敗を受け、background 自動送信維持、foreground 限定、background paste-only、全面 paste-only、no-op を比較する。現時点の推奨は foreground 限定だが、Human maintainer の判断前に実装へ固定しない。
+
+v0.1.1 の本体機能は実装済みですが、ADR 0001 は Experimental です。foreground 自動送信は実機成功、background の自動送信 / clipboard fallback は実機失敗で、Chrome Web Store には未公開です。次の判断は、未検討の事項を勝手に `Accepted` にせず、`Proposed` または `Draft` として根拠・代替案・影響を記録します。
