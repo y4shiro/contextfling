@@ -19,7 +19,8 @@ test("Manifest は MV3 の最小権限ベースラインを維持する", async 
   assert.ok(isRecord(manifest));
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.name, "ContextFling");
-  assert.equal(manifest.version, "0.0.0");
+  assert.equal(manifest.version, "0.1.0");
+  assert.equal(manifest.minimum_chrome_version, "116");
 
   const background = manifest.background;
   assert.ok(isRecord(background));
@@ -28,16 +29,40 @@ test("Manifest は MV3 の最小権限ベースラインを維持する", async 
 
   const permissions = manifest.permissions ?? [];
   const optionalPermissions = manifest.optional_permissions ?? [];
-  const hostPermissions = manifest.host_permissions ?? [];
+  const optionalHostPermissions = manifest.optional_host_permissions ?? [];
   assert.ok(Array.isArray(permissions));
   assert.ok(Array.isArray(optionalPermissions));
-  assert.ok(Array.isArray(hostPermissions));
-  assert.deepEqual(permissions, []);
-  assert.deepEqual(optionalPermissions, []);
-  assert.deepEqual(hostPermissions, []);
+  assert.ok(Array.isArray(optionalHostPermissions));
+  assert.deepEqual(permissions, [
+    "activeTab",
+    "contextMenus",
+    "scripting",
+    "storage",
+  ]);
+  assert.deepEqual(optionalPermissions, ["offscreen", "clipboardWrite"]);
+  assert.deepEqual(optionalHostPermissions, ["https://chatgpt.com/*"]);
+
+  const action = manifest.action;
+  assert.ok(isRecord(action));
+  assert.equal(action.default_title, "ContextFling の設定を開く");
+  assert.equal(manifest.options_page, "settings/settings.html");
+
+  const contentSecurityPolicy = manifest.content_security_policy;
+  assert.ok(isRecord(contentSecurityPolicy));
+  assert.equal(
+    contentSecurityPolicy.extension_pages,
+    "script-src 'self'; object-src 'self'",
+  );
 
   const serializedManifest = JSON.stringify(manifest) ?? "";
   assert.doesNotMatch(serializedManifest, /<all_urls>/i);
   assert.doesNotMatch(serializedManifest, /unsafe-(?:eval|inline)/i);
-  assert.doesNotMatch(serializedManifest, /(?:https?|wss?):\/\//i);
+  assert.doesNotMatch(
+    serializedManifest,
+    /(?:https?|wss?):\/\/(?!chatgpt\.com\/)/i,
+  );
+  assert.doesNotMatch(
+    serializedManifest,
+    /\b(?:tabs|notifications|alarms|cookies|history|<all_urls>)\b/i,
+  );
 });

@@ -9,7 +9,7 @@
     "useUnknownInCatchVariables": true,
     "noEmit": true,
     "skipLibCheck": true,
-    "types": ["node"]
+    "types": ["node", "chrome"]
   },
   "include": ["src/**/*.ts", "tests/**/*.ts"]
 }

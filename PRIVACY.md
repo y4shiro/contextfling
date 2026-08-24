@@ -6,31 +6,68 @@
 
 ## 状態と適用範囲
 
-ContextFling は現在、設計・実験段階の Chrome 拡張機能 OSS です。現時点では Chrome Web Store に公開しておらず、公開版としての提供も行っていません。この文書は、現在リポジトリにある最小スキャフォールドの状態を説明します。
+ContextFling v0.1.0 は実装済みの Experimental Chrome 拡張機能 OSS です。Chrome 実機での X→ChatGPT smoke test は未完了で、Chrome Web Store には公開していません。この文書は、現在のリポジトリにある実装のデータフローを説明します。正式名称、公開 URL、連絡先は CWS 提出前に確定します。
 
-正式名称、機能、権限、データの取り扱いが決まった場合は、実装・テスト・`CHROMEWEBSTORE.md`・この文書を同じ変更で更新します。将来計画は、実装済みのデータ処理や公開版の挙動を意味しません。
+## データフロー
 
-## 現在のデータ取り扱い
+ContextFling は、ユーザーが X / Twitter 上で文章を選択し、右クリックの `ChatGPTで解説する` を選んだときだけ、次の処理を行います。
 
-現行スキャフォールドは Manifest V3 の manifest と、処理を登録していない module Service Worker だけを含みます。したがって、現時点では次の処理を行いません。
+1. 選択文を前後の空白除去と改行の LF 化で正規化します。8,000 UTF-16 code units を超える選択文、空の選択文は処理しません。
+2. 選択位置に近い X / Twitter status URL を調べます。HTTPS の許可 host と status path だけを通し、credentials、query、hash、status id より後ろの suffix を除去します。status link が得られない場合は、許可された current page URL を同じ境界で sanitize します。
+3. sanitized URL と選択文だけを固定 prompt に埋め込みます。選択文は untrusted data として扱い、選択文内の命令やコードを ContextFling 自身が実行することはありません。
+4. 初回は設定ページに、実際に送る prompt、sanitized URL、選択文、宛先 `https://chatgpt.com/`、非公式 DOM automation と clipboard fallback のリスクを表示します。
+5. ユーザーが明示的に同意した後、毎回新しい ChatGPT Web tab を開き、ChatGPT Web の入力欄への DOM 入力と送信を一度だけ試行します。選択文と prompt は第三者である ChatGPT Web に渡ります。
 
-- ユーザーの個人情報、認証情報、閲覧履歴、ページ本文、選択テキストの収集
-- データの保存、同期、端末外への送信、第三者との共有
-- Cookie、analytics、telemetry、広告、独自バックエンド、外部 API の利用
-- ChatGPT、X、その他の Web サービスへの自動アクセス
+ContextFling の開発者や独自 backend が、選択文、URL、prompt、ChatGPT の応答を受け取ることはありません。X API、OpenAI API、analytics、telemetry、広告、remote config も使用しません。ただし、ChatGPT Web は本拡張機能の管理外の第三者サービスです。送信後の保存、利用、学習、削除は ChatGPT / OpenAI のサービス条件と Privacy Policy の対象になります。
 
-現行 Manifest の `permissions`、`optional_permissions`、`host_permissions` は空です。今後権限やデータ処理を追加する場合は、必要性、目的、保持期間、削除方法、第三者提供、ユーザーへの説明を先に整理し、レビューを通過した内容だけを実装します。
+## 保存と削除
 
-## 将来計画の扱い
+### `storage.session` の pending payload
 
-X の投稿を Source、ChatGPT Web を Destination とする構想や、ユーザー操作を起点にコンテキストを渡す構想は、現時点では設計上の候補です。これらが実装・公開されるとは限らず、実装された機能が扱うデータだけを公開版の Privacy Policy と Chrome Web Store の開示に反映します。
+同意 preview と handoff の間だけ、Chrome `storage.session` に次の一時データを保存します。
 
-ページ由来の内容を扱う機能を追加する場合も、外部サーバーへの送信、ログ、telemetry、remote code を暗黙に導入しません。仕様変更時には、データ最小化、ユーザー操作の明示性、権限の最小化、保存・削除の方法を再確認します。
+- sanitized X / Twitter URL
+- 正規化済み選択文
+- 固定 prompt
+- request ID、`awaitingConsent` / `queued` / `injecting` state、作成時刻、期限
+- consent tab、claim、target tab、adapter attempt の制御情報
 
-## 第三者サービス
+TTL は 10 分です。`expiresAt` 到達後は論理的に失効し、処理対象外になります。成功、拒否、permission 不足、DOM failure、timeout、送信結果不明、clipboard failure、consent / target tab close などの終端イベントでは pending を削除します。一方、`alarms` を使わないため、期限到達だけで `storage.session` から物理削除されるとは限りません。物理削除は次の Service Worker 起床・関連イベント、または browser restart などで行われます。送信履歴、選択文履歴、URL 履歴、ChatGPT 応答は保存しません。
 
-現行スキャフォールドは第三者サービスを利用しません。将来、外部サービスを利用する場合は、サービス名、送信するデータ、目的、利用規約・プライバシーポリシー、共有範囲をこの文書と Web Store の開示へ追記します。
+### `storage.local` の設定
 
-## 連絡先
+`storage.local` に保存するのは次の設定だけです。
 
-Privacy に関する公開窓口は未確定です。Chrome Web Store への提出または Public Release Gate の完了前に、継続して利用できる連絡先を設定します。
+- `openInBackground`: ChatGPT tab を背景で開くかどうか（既定は前面）
+- `consentVersion`: 同意済みの Experimental handoff version、または `null`
+
+同意を撤回すると、pending を削除し、optional permission を削除し、consent version を `null` に戻します。設定画面で選択文や URL を保存することはありません。
+
+## Clipboard fallback
+
+ChatGPT Web の入力欄が見つからない、未ログイン、DOM が変更された、timeout、送信結果が不明などの場合、自動再送は行いません。同意済みの prompt を同梱 offscreen document から Clipboard API へ一度だけ書き、ChatGPT tab 内の固定 banner で手動貼り付けを案内します。
+
+ContextFling は clipboard を読みません。ユーザーが上書きするまで、OS や他のアプリが clipboard 内容を保持する可能性があります。clipboard fallback を望まない場合は、権限を許可せず preview を拒否してください。
+
+## 取得しないデータ・使わない機能
+
+ContextFling は次の情報を取得、保存、開発者へ送信しません。
+
+- Cookie、token、ChatGPT の auth state、API key、パスワード
+- X / Twitter のログイン情報、投稿者以外のページ全文、閲覧履歴、既存 ChatGPT 会話、ChatGPT 応答
+- clipboard の既存内容
+- analytics、telemetry、広告識別子、利用状況の測定
+
+`tabs`、X / Twitter の恒久 host permission、`cookies`、`history`、`bookmarks`、`webRequest`、`notifications`、`alarms`、`clipboardRead`、`<all_urls>` は使用しません。
+
+## ユーザーへの注意
+
+選択文は ChatGPT Web という第三者サービスへ渡るため、秘密情報、個人情報、認証情報、勤務先・顧客情報、契約上の非公開情報を選択しないでください。X / Twitter と ChatGPT / OpenAI の利用規約・Privacy Policy を確認し、送信内容と third-party processing を自分で判断してください。
+
+## 連絡先と削除依頼
+
+公開サポート窓口は未確定です。CWS 提出前は GitHub Issues を一般的な質問の窓口として整備し、個人情報や秘密を含む削除相談は公開 Issue に投稿しない方法を用意します。拡張機能内の pending と設定を削除するには、処理を終える、preview を拒否する、または設定画面で同意を撤回してください。ChatGPT Web に渡ったデータの削除は、ChatGPT / OpenAI の提供する手順に従ってください。
+
+## 脆弱性の報告
+
+セキュリティ問題は GitHub Private vulnerability reporting を優先してください。token、Cookie、個人情報、未修正の再現情報を公開 Issue や Pull Request に記載しないでください。詳細は [SECURITY.md](SECURITY.md) を参照してください。

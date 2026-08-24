@@ -2,127 +2,114 @@
 
 > 最終更新: 2026-08-24
 >
-> `ContextFling` は Working Name（仮称）。v0.1 の設計は Accepted Experimental だが、現行コードは未実装で、Chrome Web Store には未公開である。
+> v0.1.0 実装済み・Experimental。Chrome 実機 smoke は未完了、Chrome Web Store には未公開。
 
 ## ストア掲載情報
 
-**拡張機能名**: ContextFling（Working Name、提出前に正式名称を再確認）
+**拡張機能名**: ContextFling（Working Name、正式名称と商標は提出前に再確認）
 
-**短い説明**: 未確定。v0.1 実装後の実際の挙動だけを記載する。
+**短い説明（候補）**: X で選択した文章を、新しい ChatGPT Web 会話へ渡して解説を依頼します。
 
-**詳細な説明**: 未確定。設計上の v0.1 は、X で選択した文章を右クリックの `ChatGPTで解説する` から ChatGPT Web の新規会話へ渡す実験機能である。ただし現行スキャフォールドに本体機能はなく、掲載用の説明として確定していない。DOM automation が公式連携ではないこと、初回 preview/同意、clipboard fallback、データ利用の実装結果は公開前に正確に記載する。
+**詳細な説明（候補）**: X / Twitter で文章を選択し、右クリックから ChatGPT Web の新しい会話へ渡します。初回は送信内容と宛先を確認してから同意できます。ChatGPT Web への受け渡しに失敗した場合は、手動貼り付け用の案内を表示します。送信履歴は拡張機能内に保存しません。
+
+ユーザー向け listing では、DOM selector や実装の詳細を過度に強調しません。ただし review notes、Privacy 開示、利用規約確認では、ChatGPT Web の非公式・Experimental な DOM 依存であることを正確に記載します。
 
 **カテゴリ**: 未確定
 
-**Single Purpose**: 未確定。候補は「X で選択した文章と URL を、新しい ChatGPT Web 会話へ渡す」だが、実装・Security/Privacy review 後に確定する。
+**Single Purpose**: X / Twitter でユーザーが選択した文章と sanitized URL を、新しい ChatGPT Web 会話へ渡して解説を依頼すること。
 
-**主言語**: 日本語（掲載言語は未確定）
+**主言語**: 日本語（最終掲載言語は提出前に確定）
 
 ## グラフィックと素材
 
 | 素材 | 寸法 | 状態 | ファイル |
 | --- | --- | --- | --- |
 | ストアアイコン（必須） | 128×128 PNG | 未作成 | 未確定 |
-| スクリーンショット 1（必須） | 1280×800 または 640×400 | 未作成 | 未確定 |
+| スクリーンショット 1（必須） | 1280×800 または 640×400 | 実機 smoke 後 | 未確定 |
 | スクリーンショット 2（推奨） | 1280×800 または 640×400 | 未作成 | 未確定 |
 | スクリーンショット 3（推奨） | 1280×800 または 640×400 | 未作成 | 未確定 |
-| スクリーンショット 4 | 1280×800 または 640×400 | 未作成 | 未確定 |
-| スクリーンショット 5 | 1280×800 または 640×400 | 未作成 | 未確定 |
 | Small Promo Tile（推奨） | 440×280 | 未作成 | 未確定 |
 | Marquee Promo Tile | 1400×560 | 未作成 | 未確定 |
 
-### スクリーンショットのメモ
+実機確認前に、個人情報や実アカウントの機密情報を含む画像は作成しません。
 
-現行機能は未実装のため、動作を示すスクリーンショットは作成しない。実装後、X の選択、正確な preview、同意、ChatGPT 新規会話、DOM failure/clipboard fallback の表示を、個人情報なしで撮影する。
+## 現在の Manifest と権限理由
 
-## 権限の説明
+`src/manifest.json` の v0.1.0 現在値は次のとおりです。
 
-### 現在の Manifest
+| Manifest key | 現在値 |
+| --- | --- |
+| `manifest_version` | `3` |
+| `version` | `0.1.0` |
+| `minimum_chrome_version` | `116` |
+| `permissions` | `activeTab`, `contextMenus`, `scripting`, `storage` |
+| `optional_permissions` | `offscreen`, `clipboardWrite` |
+| `optional_host_permissions` | `https://chatgpt.com/*` |
+| `host_permissions` | なし |
+| `options_page` | `settings/settings.html` |
+| `action` | `{"default_title":"ContextFling の設定を開く"}`。クリックで設定画面を開く |
 
-`src/manifest.json` の現行ベースラインは、`permissions`、`optional_permissions`、`host_permissions`、`optional_host_permissions` のいずれも未定義（実質的に空）である。したがって、以下の設計理由は予定であり、現在のストア権限ではない。
+| 権限 | 種別 | 実装上の理由 | 使用しない目的 |
+| --- | --- | --- | --- |
+| `activeTab` | required | X / Twitter 上のユーザー操作時に、現在 tab の一時的な情報へアクセスする | X / Twitter の恒久アクセス |
+| `contextMenus` | required | 選択文用の `ChatGPTで解説する` menu を登録する | 複数の preset menu |
+| `scripting` | required | X の isolated-world URL extractor、同意後の ChatGPT adapter、固定 banner を実行する | remote code、任意サイト操作 |
+| `storage` | required | pending payload を session、設定と consent version を local に保存する | 送信・閲覧履歴の保存 |
+| `https://chatgpt.com/*` | optional host | exact preview と同意後だけ ChatGPT Web adapter / banner を限定 host へ注入する | X / Twitter や任意 host への注入 |
+| `offscreen` | optional | adapter 失敗時の同梱 offscreen clipboard fallback を作成する | 外部ページ、外部コード |
+| `clipboardWrite` | optional | fallback prompt を Clipboard API に一度だけ書く | clipboard の読み取り |
 
-| 権限 | 種別 | 現在の状態 |
-| --- | --- | --- |
-| なし | permissions / optional_permissions / host_permissions / optional_host_permissions | 現行スキャフォールドは権限を追加していない。 |
+optional permission は、preview の表示後に設定ページの approve button の同期 click handler から `chrome.permissions.request()` を直接呼びます。呼び出し前に await を置かず user gesture を保ち、要求の promise が解決した後に approve runtime message を送ります。Service Worker は message を受けた後に `chrome.permissions.contains()` で host / `offscreen` / `clipboardWrite` の bundle 一式を最終確認し、拒否または不足なら送信せず pending を削除します。storage 操作は Service Worker 経由に限定します。
 
-### v0.1 Accepted Experimental design（未実装）
+## 使用しない権限・機能
 
-| 権限 | 種別 | 提出時の説明候補 |
-| --- | --- | --- |
-| `activeTab` | `permissions` | ユーザーが X 上で context menu を選んだときだけ、現在の tab の一時的な access を得て、選択位置と URL を処理する。X/Twitter への恒久 host access は要求しない。 |
-| `contextMenus` | `permissions` | 選択文章に対する `ChatGPTで解説する` の右クリック menu を登録する。 |
-| `scripting` | `permissions` | ユーザー操作で許可された X tab の isolated-world extractor と、同意済み `chatgpt.com` tab の限定 adapter/banner を実行する。remote code は実行しない。 |
-| `storage` | `permissions` | 送信中だけの pending payload を session storage に置き、設定と consent version を local storage に置く。履歴・本文履歴・URL 履歴は保存しない。 |
-| `https://chatgpt.com/*` | `optional_host_permissions` | 初回 preview で宛先とリスクを示し、明示同意したユーザーに限って ChatGPT Web DOM adapter と banner を同じ host に限定して実行する。 |
-| `offscreen` | `optional_permissions` | DOM adapter が失敗した場合に、同梱 static offscreen document から clipboard fallback を行う。外部ページ・外部コードは読み込まない。 |
-| `clipboardWrite` | `optional_permissions` | 同意済みの clipboard fallback で、送信対象と同じ固定 prompt を Clipboard API に一度だけ書く。clipboardRead は使わない。 |
+`tabs`、X / Twitter の恒久 `host_permissions`、`notifications`、`alarms`、`clipboardRead`、`cookies`、`history`、`bookmarks`、`webRequest`、`identity`、`<all_urls>`、OpenAI API key は使用しません。X API、独自 backend、analytics、telemetry、広告、remote config、remote code もありません。
 
-optional permission は初回の送信内容、宛先、リスクの preview 後に、同意画面のボタン操作からだけ要求する。拒否した場合は送信せず、pending payload を削除する。Chrome 公式仕様、permission warning、実装の実際の挙動を提出前に再確認する。
+## Data use と Privacy 開示
 
-### 使用しない権限
+拡張機能の開発者が収集・販売するデータはありません。ただし、ユーザー操作で次のデータを一時処理し、同意後に第三者の ChatGPT Web へ渡します。
 
-`tabs`、X/Twitter の恒久 `host_permissions`、`notifications`、`alarms`、`clipboardRead`、`cookies`、`history`、`webRequest`、`identity`、`<all_urls>`、OpenAI API key は v0.1 で使用しない。Action click は設定画面を開くだけで、action 自体は permission ではない。
+| データ | 目的 | 開発者 / backend への送信 | 保持 |
+| --- | --- | --- | --- |
+| 選択文（正規化後、最大 8,000 UTF-16 code units） | ChatGPT へ解説を依頼する | なし | `storage.session` の pending と処理中のみ |
+| sanitized X / Twitter URL | 選択文の参照元を prompt に含める | なし | 同上 |
+| 固定 prompt | preview と ChatGPT Web への handoff | なし | 同上 |
+| `openInBackground`、consent version | UI 設定と同意状態 | なし | `storage.local` |
 
-## Privacy とデータ利用
+DOM 失敗時には、同意済みの prompt を clipboard に書く場合があります。拡張機能は clipboard を読みません。詳細な保持・削除・第三者境界は [PRIVACY.md](PRIVACY.md) に記載します。
 
-### 現在のスキャフォールド
+**ユーザーデータを収集するか**: 開発者による収集はありません。中核機能のためにユーザーが選択した文章と sanitized URL を一時処理し、同意後に ChatGPT Web へ渡します。
 
-現行コードはページ本文、選択テキスト、URL、認証情報などのデータを処理、保存、同期、端末外送信しない。Chrome Web Store には未公開である。詳細は [PRIVACY.md](PRIVACY.md) を参照する。
+**データを販売するか**: いいえ。
 
-**ユーザーデータを収集するか**: 現行コードでは いいえ（v0.1 実装後に再確認）
+**中核機能と無関係な目的に使うか**: いいえ。
 
-### v0.1 の予定データフロー（未実装）
+**信用力・融資目的に使うか**: いいえ。
 
-ユーザーの明示操作で、選択文章と sanitized X/Twitter URL を一時的に処理し、preview の同意後に ChatGPT Web の新規会話へ渡す設計である。pending payload は session storage にのみ置き、成功・拒否・失敗・timeout・tab close・期限切れで削除する。送信履歴、Cookie、auth state、著者・日時などの余分な metadata は扱わない。
+## Privacy Policy とサポート
 
-この予定は現行のデータ収集を意味しない。実装時にデータの種類、第三者サービスへの送信、ChatGPT 側での取り扱い、clipboard fallback、保持・削除を確定し、CWS の開示と Privacy Policy を同じ変更で更新する。
+**Privacy Policy URL**: 未確定。CWS 提出前に、公開 URL と [PRIVACY.md](PRIVACY.md) の内容を一致させます。
 
-### データ利用の証明
+**サポート URL**: GitHub Issues（公開可能な質問のみ）を候補とします。
 
-- [ ] データを第三者へ販売しない（実装と提出前に最終確認）
-- [ ] 拡張機能の中核機能と無関係な目的へデータを使わない（実装と提出前に最終確認）
-- [ ] 信用力・融資目的にデータを使わない（実装と提出前に最終確認）
+**脆弱性報告**: 機密性のある内容は GitHub Private vulnerability reporting を使用し、公開 Issue に token、個人情報、未修正の詳細を投稿しません。
 
-## Privacy Policy
+## 配布状態とバージョン履歴
 
-**Privacy Policy URL**: 未確定。公開ゲート前に、公開 URL、連絡先、実装と一致した `PRIVACY.md` を用意する。
+**ソースリポジトリ**: [GitHub で Public OSS として公開済み](https://github.com/y4shiro/contextfling)。ソース公開は CWS 公開を意味しません。
 
-## 配布
-
-**ソースリポジトリ**: [GitHub で Public OSS として公開済み](https://github.com/y4shiro/contextfling)。拡張機能の公開リリースとは別である。
-
-**Chrome Web Store 公開範囲**: 未確定。Public Release Gate 完了まで提出しない。
-
-**地域**: 未確定
-
-## 開発者情報
-
-**公開者名**: 未確定
-
-**連絡先メールアドレス**: 未確定
-
-**サポート URL / メール**: 未確定
-
-**ホームページ URL**: 未確定
-
-## バージョン履歴
+**Chrome Web Store**: 未公開。実機 smoke、Security / Privacy review、正式名称、素材、Privacy Policy URL、サポート窓口、利用規約確認を終えるまで提出しません。
 
 | バージョン | 日付 | 変更 | 状態 |
 | --- | --- | --- | --- |
-| 0.0.0 | 2026-08-24 | Manifest V3 の最小スキャフォールドと v0.1 Accepted Experimental design を記録。本体機能は未実装。 | Draft |
+| 0.1.0 | 2026-08-24 | X selection、preview / consent、ChatGPT Web Experimental handoff、clipboard fallback、設定画面、最小権限 Manifest を実装。 | Unreleased / 実機 smoke pending |
+| 0.0.0 | 2026-08-24 | Manifest V3 の初期スキャフォールド。 | Superseded |
 
-## レビュー notes
+## Review notes と Release Gate
 
-### 既知の制限
+- ChatGPT Web DOM automation は公式連携ではなく、DOM 変更、未ログイン、送信結果不明、利用条件、CWS 審査のリスクがあります。自動 retry はせず、clipboard fallback と banner を使います。
+- Chrome 116 以上での実機 X→ChatGPT smoke test（logged-in / logged-out、前面 / 背景、tab close、DOM failure、clipboard success / failure、同意撤回）が未完了です。
+- 正式名称、商標、掲載素材、Privacy Policy 公開 URL、連絡先、CWS data disclosure の最終入力が未完了です。
+- 実機 smoke と Security / Privacy review の結果により、Experimental scope を撤回または変更する可能性があります。変更時は ADR と関連文書を更新します。
 
-- v0.1 設計は Accepted Experimental だが、現行コード、Manifest、権限は未実装・未追加。
-- ChatGPT Web DOM automation は公式連携ではなく、DOM 変更、未ログイン、送信結果不明、利用条件、CWS 審査のリスクがある。
-- 正式名称、掲載文言、権限 warning、Privacy Policy URL、素材、連絡先、公開時期は未確定。
-
-### 却下履歴
-
-なし。
-
-## 提出前チェック
-
-正式名称、LICENSE、`CONTRIBUTING.md`、`SECURITY.md`、`PRIVACY.md`、`CHANGELOG.md`、権限の個別理由、optional permission の同意 UI、Privacy 開示、連絡先、素材、実機検証、DOM/clipboard failure、Security/Privacy review、ChatGPT/OpenAI 利用条件確認、Release Gate を完了してから提出する。
+提出前に上記の未完了項目、`CHANGELOG.md`、LICENSE、CONTRIBUTING、Security、Privacy、権限 warning、ChatGPT / OpenAI の利用規約を確認します。

@@ -2,54 +2,61 @@
 
 > Working Name（仮称）: ContextFling
 
-ContextFling は、現在表示しているコンテンツを少ない操作でチャット型 AI へ渡すことを目指す Chrome 拡張機能 OSS の準備リポジトリです。正式名称、公開範囲、機能仕様はまだ確定していません。
+ContextFling は、X で選択した文章を新しい ChatGPT Web の会話へ渡し、解説を依頼する Chrome 拡張機能 OSS です。
 
 ## 現在の状態
 
-現在は Manifest V3 の監査可能な最小スキャフォールドのみを管理しています。現行コードはページ本文、選択テキスト、URL、認証情報などのデータを処理、保存、送信しません。v0.1 は Source を X、Destination を ChatGPT Web とする実験設計を採用しましたが、確定実装や公開版の挙動を意味しません。本体機能、Popup、Options、プリセット、コンテキスト抽出、AI への handoff はまだ実装していません。
+v0.1.0 の実装と自動検証は完了しています。ただし、ChatGPT Web の DOM に依存する Experimental 機能のため、Chrome 実機での X→ChatGPT smoke test は未完了です。Chrome Web Store にはまだ公開していません。
 
-現行 Manifest の権限ベースラインは空です。v0.1 の Accepted Experimental design では、required candidate を `activeTab`、`contextMenus`、`scripting`、`storage`、optional candidate を `https://chatgpt.com/*`、`offscreen`、`clipboardWrite` としています。実装・permission test・CWS/Privacy 更新が揃うまで Manifest へ追加しません。`<all_urls>`、外部バックエンド、analytics、telemetry、remote code、X API、OpenAI API は使用しません。ChatGPT Web の DOM automation は公式連携ではない実験機能であり、明示的な初回 preview/同意、対象 host の限定、自動再試行の禁止、クリップボードへの fallback を前提とします。現行コードには含まれません。
+現行の主な挙動は次のとおりです。
+
+- X / Twitter の選択範囲を右クリックし、`ChatGPTで解説する` を選びます。
+- 選択文は前後の空白と改行を正規化し、8,000 UTF-16 code units を上限にします。選択位置に近い status URL を優先し、取得できない場合は許可された X / Twitter ページ URL を query/hash なしで使います。
+- 初回は、実際に送る prompt、URL、選択文、宛先、DOM 自動操作と clipboard fallback のリスクをプレビューします。明示的に同意した場合だけ権限を要求します。
+- 同意後は毎回新しい `https://chatgpt.com/` タブを開きます。ChatGPT タブは前面表示が既定で、設定からバックグラウンド表示へ変更できます。
+- ChatGPT Web への DOM 入力・送信は一度だけ試行します。失敗時は自動再送せず、clipboard fallback と ChatGPT タブ内の banner で案内します。
+- action は設定画面を開きます。送信履歴、選択文の履歴、URL 履歴は拡張機能内に保存しません。
+
+ChatGPT Web には公式の拡張機能連携 API を使っていません。ログイン状態、Cookie、token、既存会話は読み取りません。選択文と sanitized URL は、ユーザーの同意後に第三者である ChatGPT Web へ渡ります。詳細は [PRIVACY.md](PRIVACY.md) を確認してください。
 
 ## 開発
 
-Node.js 24 を第一候補、パッケージマネージャーを npm としています。依存関係は開発時だけに限定し、Extension の runtime dependency は原則 0 を目標にします。
+Node.js 24 以上と npm を使用します。実行時の外部ライブラリ依存はありません。
 
 ```sh
 npm install
-npm run lint
-npm run format
-npm run typecheck
 npm test
+npm run typecheck
+npm run lint
 npm run build
 npm run check:secrets
 ```
 
-`npm run build` は `src/service-worker.ts` を bundle して `dist/service-worker.js` を作成し、`src/manifest.json` を `dist/manifest.json` としてコピーします。`dist/` は生成物のため Git 管理対象外です。
+`npm run build` は Service Worker、設定ページ、offscreen clipboard ページを bundle し、静的 HTML/CSS と Manifest を `dist/` へ配置します。`dist/` は生成物であり、Git 管理対象外です。
 
-## 構成
+### unpacked extension の確認
 
-```text
-src/manifest.json                 Manifest V3 の最小定義
-src/service-worker.ts             現時点では処理を持たない module Service Worker
-scripts/build.mjs                 esbuild による生成
-tests/manifest.test.ts            Manifest の権限・CSP ベースライン検証
-tests/secret-scan.test.mjs        Secret scan の高確度検出・除外検証
-scripts/check-secrets.mjs         追跡対象・ステージ内容の secret scan
-docs/architecture/                要件レビューと公式仕様確認
-docs/adr/                         設計判断の記録
-```
+1. `npm run build` を実行します。
+2. Chrome で `chrome://extensions` を開き、Developer mode を有効にします。
+3. `Load unpacked` からリポジトリの `dist/` を選びます。
+4. X / Twitter 上の文章を選択し、右クリックの `ChatGPTで解説する` を実行します。
+5. 初回 preview で送信内容と宛先を確認し、同意するか拒否します。
 
-v0.1 の設計結論は [ADR 0001](docs/adr/0001-experimental-chatgpt-web-handoff.md)、詳細な責務・state machine・permission matrix・受入条件は [v0.1 設計書](docs/architecture/v0.1-design.md)、コードを書かない分割計画は [v0.1 実装計画](docs/architecture/v0.1-implementation-plan.md) に記録しています。
+実機 smoke では実アカウントの機密情報を選択せず、ChatGPT のログイン済み・未ログイン、前面・背景表示、DOM 変更、clipboard fallback、同意撤回を確認してください。
 
-詳細な境界・用語・未決定事項は [CONTEXT.md](CONTEXT.md)、継続的な実装ルールは [AGENTS.md](AGENTS.md) を参照してください。Chrome Web Store の提出情報は [CHROMEWEBSTORE.md](CHROMEWEBSTORE.md) に集約します。
+## 設計と制約
+
+- 必須権限は `activeTab`、`contextMenus`、`scripting`、`storage` です。
+- `https://chatgpt.com/*`、`offscreen`、`clipboardWrite` は preview 後の同意ボタンから要求する optional permission です。
+- X / Twitter の恒久 host permission、`tabs`、`cookies`、`history`、`notifications`、`alarms`、`clipboardRead`、`<all_urls>`、backend、analytics、telemetry、OpenAI API、remote code は使用しません。
+- pending payload は `storage.session` に一時保存し、`expiresAt` により 10 分で論理失効させます。終端イベントでは削除しますが、`alarms` を使わないため、期限到達だけで物理削除されるとは限りません。物理削除は次の Service Worker 起床・関連イベント、または browser restart などで行われます。設定と consent version だけを `storage.local` に保存します。
+- ChatGPT Web の DOM 構造変更、未ログイン、送信結果不明、Chrome / Web Store の審査・利用条件が既知の制限です。実装は Experimental のままです。
+
+詳細な責務、権限、状態遷移、受入状況は [v0.1 設計書](docs/architecture/v0.1-design.md)、実装履歴は [CHANGELOG.md](CHANGELOG.md)、公開前の確認事項は [CHROMEWEBSTORE.md](CHROMEWEBSTORE.md) に記録しています。継続ルールは [AGENTS.md](AGENTS.md) を参照してください。
 
 ## 公開状態
 
-ソースリポジトリは、設計と開発過程を監査可能にするためOSSとして公開します。これは拡張機能の公開リリースや、Chrome Web Store での提供開始を意味しません。
-
-Chrome Web Store へ提出する前に、正式名称・branding・CHANGELOG、確定したデータ利用説明、権限、サポート窓口、スクリーンショット、実機確認、Security/Privacy review を含む Public Release Gate を完了します。`LICENSE`（MIT）、`CONTRIBUTING.md`、`SECURITY.md`、`PRIVACY.md` は作成済みです。
-
-現在は設計・実験段階であり、Chrome Web Store には未公開です。将来計画を変更した場合は、実装済みのコード、テスト、README、Privacy Policy、Web Store 開示を同じ変更で更新します。
+ソースリポジトリは [GitHub で Public OSS として公開済み](https://github.com/y4shiro/contextfling) です。ソース公開と拡張機能の公開リリースは別であり、Chrome Web Store への提出は、実機 smoke、Security / Privacy review、正式名称、掲載素材、Privacy Policy の公開 URL、サポート窓口を確認してから行います。
 
 ## ライセンス
 

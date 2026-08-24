@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="script-src 'self'; object-src 'self';"
+    />
+    <title>ContextFling 設定</title>
+    <link rel="stylesheet" href="settings.css" />
+  </head>
+  <body>
+    <main id="settings-page" class="page-shell">
+      <header class="page-header">
+        <p class="eyebrow">ContextFling</p>
+        <p id="page-status" class="status" role="status" aria-live="polite"></p>
+      </header>
+
+      <section id="settings-view" aria-labelledby="settings-title">
+        <h1 id="settings-title">設定</h1>
+        <p class="lede">
+          X で選択した文章を、新しい ChatGPT Web タブで解説します。
+        </p>
+
+        <fieldset class="settings-group">
+          <legend>ChatGPT タブの表示</legend>
+          <label class="checkbox-row" for="foreground-tab">
+            <input id="foreground-tab" type="checkbox" checked />
+            <span>ChatGPT タブを前面で開く</span>
+          </label>
+          <p id="foreground-tab-help" class="help-text">
+            オフにすると、処理中のタブをそのまま表示します。
+          </p>
+        </fieldset>
+
+        <section class="settings-group" aria-labelledby="consent-title">
+          <h2 id="consent-title">ChatGPT Web の同意</h2>
+          <p id="consent-status" class="consent-status">確認中です。</p>
+          <p class="help-text">
+            同意を撤回すると、次回の実行時に送信内容のプレビューと確認が必要になります。
+          </p>
+          <button id="revoke-consent" class="secondary-button" type="button" disabled>
+            同意を撤回する
+          </button>
+        </section>
+      </section>
+
+      <section id="preview-view" aria-labelledby="preview-title" hidden>
+        <h1 id="preview-title">ChatGPTで解説する</h1>
+        <p class="lede">
+          次の内容を、新しい ChatGPT Web タブへ送信します。内容を確認してから選択してください。
+        </p>
+
+        <dl class="preview-details">
+          <div>
+            <dt>宛先</dt>
+            <dd id="preview-destination">https://chatgpt.com/</dd>
+          </div>
+          <div>
+            <dt>参照する URL</dt>
+            <dd id="preview-source-url" class="breakable">読み込み中です。</dd>
+          </div>
+          <div>
+            <dt>選択した文章</dt>
+            <dd id="preview-selection" class="preserve-whitespace">読み込み中です。</dd>
+          </div>
+          <div>
+            <dt>実際に送信するプロンプト</dt>
+            <dd>
+              <pre id="preview-prompt" class="prompt-block">読み込み中です。</pre>
+            </dd>
+          </div>
+        </dl>
+
+        <section class="notice" aria-labelledby="preview-notice-title">
+          <h2 id="preview-notice-title">確認事項</h2>
+          <ul>
+            <li>宛先は chatgpt.com の新しい会話です。既存の会話や履歴は使用しません。</li>
+            <li>ChatGPT Web の非公式な DOM 自動操作を使うため、画面変更で失敗することがあります。</li>
+            <li>自動入力・送信に失敗した場合は自動再送せず、クリップボードへのコピーを案内します。</li>
+            <li>同意すると、ChatGPT Web へのアクセスとクリップボード変更の権限を要求します。</li>
+          </ul>
+        </section>
+
+        <div class="actions" aria-describedby="action-help">
+          <button id="approve-preview" class="primary-button" type="button" disabled>
+            同意して送信する
+          </button>
+          <button id="reject-preview" class="secondary-button" type="button" disabled>
+            拒否して破棄する
+          </button>
+        </div>
+        <p id="action-help" class="help-text">
+          拒否した場合は何も送信せず、一時的な送信内容も破棄します。
+        </p>
+      </section>
+
+      <noscript>このページを利用するには JavaScript を有効にしてください。</noscript>
+    </main>
+    <script src="settings.js" type="module"></script>
+  </body>
+</html>

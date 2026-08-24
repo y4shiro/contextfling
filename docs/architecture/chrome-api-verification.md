@@ -4,7 +4,7 @@
 >
 > Working Name（仮称）: ContextFling
 >
-> 注意: 現行 `src/manifest.json` は permission/host permission を持たない。下記の v0.1 matrix は設計候補であり、実装・permission test・CWS/Privacy 更新なしに Manifest へ追加しない。
+> 現状: `src/manifest.json` は v0.1.0 の permission matrix を実装済み。Chrome 実機 X→ChatGPT smoke と CWS 公開は未完了。
 
 ## 参照した Chrome 公式ページ
 
@@ -31,7 +31,7 @@ v0.1 は X 上の context menu を起点にするため、X/Twitter の恒久 ho
 
 ### `contextMenus`
 
-`chrome.contextMenus` の create/update には `contextMenus` permission が必要である。v0.1 では `selection` context に `ChatGPTで解説する` 1 項目だけを登録し、menu invocation が `activeTab` の user gesture になることを利用する。現行 Manifest にはまだ追加していない。
+`chrome.contextMenus` の create/update には `contextMenus` permission が必要である。v0.1.0 では `selection` context に `ChatGPTで解説する` 1 項目だけを登録し、menu invocation が `activeTab` の user gesture になることを利用する。現行 Manifest に実装済みである。
 
 ### `storage` / `storage.session`
 
@@ -41,11 +41,11 @@ v0.1 は X 上の context menu を起点にするため、X/Twitter の恒久 ho
 
 Offscreen API は Chrome 109+ MV3 で、`offscreen` permission と同梱 static HTML document が必要である。offscreen document で利用できる extension API は `chrome.runtime` に制限されるため、clipboard 処理は offscreen 側、permission/state/結果の調整は Service Worker 側で messaging する。インストール済み extension では通常 profile ごとに一つの offscreen document しか開けない。
 
-`runtime.getContexts()` は Chrome 116+ で offscreen document の存在確認に使える。older Chrome には `clients.matchAll()` fallback が公式ページに記載されているが、v0.1 の minimum Chrome は 116 を第一候補とし、採用前に実機検証する。Chrome 116 は設計候補であって、現行 Manifest の確定値ではない。
+`runtime.getContexts()` は Chrome 116+ で offscreen document の存在確認に使える。older Chrome には `clients.matchAll()` fallback が公式ページに記載されている。v0.1.0 の `minimum_chrome_version` は `116` であり、実機 lifecycle と permission prompt は smoke test で検証する。
 
 ### Optional permissions / host permissions
 
-`chrome.permissions.request()` は manifest の `optional_permissions` または `optional_host_permissions` に宣言した権限を、user gesture 内で runtime request する API である。v0.1 は初回 preview を表示し、同意画面のボタン handler から optional `https://chatgpt.com/*`、`offscreen`、`clipboardWrite` を要求する。request の前に await や別の非同期処理を入れず、拒否なら送信・保存を行わない。
+`chrome.permissions.request()` は manifest の `optional_permissions` または `optional_host_permissions` に宣言した権限を、user gesture 内で runtime request する API である。v0.1 は初回 preview を表示し、設定ページの approve button の同期 click handler から optional `https://chatgpt.com/*`、`offscreen`、`clipboardWrite` を直接要求する。request の前に await や別の非同期処理を入れず、promise 解決後に approve runtime message を送る。Service Worker は message 後に `chrome.permissions.contains()` で bundle 一式を最終確認し、拒否・不足なら送信せず pending を削除する。storage 操作は Service Worker 経由とする。
 
 Chrome の permission request では origin の path は無視されるため、`https://chatgpt.com/*` は CWS と UI で ChatGPT origin に限定した host access として説明し、実機の permission prompt で確認する。X/Twitter の恒久 host permission は宣言しない。
 
@@ -59,15 +59,15 @@ v0.1 は `tabs` permission、X/Twitter の恒久 host permission、`notification
 
 ### action / settings
 
-Action API は Manifest の `action` key を必要とするが、action 自体は permission ではない。v0.1 の action click は即時 handoff や Popup ではなく、拡張機能内の設定・同意画面を開く。初回 preview と permission request はその画面の明示ボタンから行う。
+Action API は Manifest の `action` key を必要とするが、action 自体は permission ではない。v0.1 の action click は即時 handoff や Popup ではなく、拡張機能内の設定・同意画面を開く。初回 preview と permission request はその画面の明示ボタンから行う。approve button の同期 click handler が permission request を直接呼び、要求後に runtime message を送る。Service Worker は permission の最終確認と storage を担う。
 
-## v0.1 permission matrix
+## v0.1 permission matrix（現行 Manifest）
 
 ```text
-Required candidate:
+Required:
   activeTab + contextMenus + scripting + storage
 
-Optional candidate requested only after consent:
+Optional requested only after consent:
   optional_host_permissions: https://chatgpt.com/*
   optional_permissions: offscreen, clipboardWrite
 
@@ -84,4 +84,4 @@ project-local の `chrome-extensions` Skill は `tab.url` に `tabs` permission 
 
 ## 設計への適用
 
-この確認結果を反映した設計は [v0.1 design](v0.1-design.md)、判断と撤回条件は [ADR 0001](../adr/0001-experimental-chatgpt-web-handoff.md)、実装順序は [v0.1 implementation plan](v0.1-implementation-plan.md) にある。現行コードへ権限や DOM automation はまだ追加されていない。
+この確認結果を反映した設計は [v0.1 design](v0.1-design.md)、判断と撤回条件は [ADR 0001](../adr/0001-experimental-chatgpt-web-handoff.md)、実装順序と検証状況は [v0.1 implementation plan](v0.1-implementation-plan.md) にある。現行コードには permission、settings、X extractor、ChatGPT DOM adapter、clipboard fallback が実装済みである。Chrome 実機 smoke と CWS 公開は残存 gate である。

@@ -16,4 +16,4 @@ Architecture Decision Record（ADR）は、変更コストが高く、複数の�
 
 - [0001: 実験的 ChatGPT Web handoff](0001-experimental-chatgpt-web-handoff.md) — v0.1 の限定 scope、初回 preview/明示同意、optional host/offscreen/clipboardWrite、毎回新規会話、retry 禁止、session cleanup を採用。実装成功・公式連携・Web Store 公開を意味しない。
 
-現行スキャフォールドはまだ本体機能を実装していません。次の判断は、未検討の事項を勝手に `Accepted` にせず、`Proposed` または `Draft` として根拠・代替案・影響を記録します。
+v0.1.0 の本体機能は実装済みですが、ADR 0001 は Experimental で、Chrome 実機 smoke と Chrome Web Store 公開は未完了です。次の判断は、未検討の事項を勝手に `Accepted` にせず、`Proposed` または `Draft` として根拠・代替案・影響を記録します。

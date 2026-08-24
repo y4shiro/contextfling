@@ -2,84 +2,72 @@
 
 ## 現在のサポート状況
 
-ContextFling は設計・実験段階であり、Chrome Web Store で公開している
-サポート対象バージョンはまだありません。未リリースのコードについても、
-セキュリティ上の問題の報告を受け付けます。
+ContextFling v0.1.0 は実装済みですが、ChatGPT Web DOM automation を含む Experimental build です。Chrome 実機の X→ChatGPT smoke test は未完了で、Chrome Web Store には未公開です。未リリースのコードについてもセキュリティ問題を受け付けます。
 
 ## System and Scope
 
-このポリシーは、ContextFling リポジトリ全体に適用します。
+現行コードは Manifest V3 の X selection handoff です。`activeTab`、`contextMenus`、`scripting`、`storage` を使い、同意後に optional `https://chatgpt.com/*`、`offscreen`、`clipboardWrite` を使います。独自 backend、データベース、analytics、telemetry、広告、X API、OpenAI API はありません。
 
-現行コードは Manifest V3 の最小スキャフォールドであり、ユーザーデータを
-処理、保存、送信しません。計画中の v0.1 は、X 上でユーザーが選択した
-テキストと投稿 URL を、明示的な操作を起点に ChatGPT Web の新規チャットへ
-渡す Chrome 拡張機能です。
-
-独自バックエンド、データベース、analytics、telemetry、広告、X API、
-OpenAI API は使用しません。
+ユーザーが X / Twitter で選択した文章と sanitized URL は、初回 preview と明示同意の後、毎回新しい ChatGPT Web 会話へ渡ります。ChatGPT Web、X / Twitter、Chrome は本リポジトリの管理外の第三者境界です。
 
 ## Threat Model and Trust Boundaries
 
-- X と ChatGPT のページ本文、DOM、URL、選択テキストは信頼しません。
-- 選択テキストには個人情報、機密情報、悪意ある指示が含まれる可能性があります。
-- X、ChatGPT、Chrome 自体は第三者サービスであり、本リポジトリの管理範囲外です。
-- 拡張機能から ChatGPT への受け渡しは、ユーザー端末と第三者サービスの境界を越えます。
-- 外部 GLM worker は公開済みのコードだけを扱い、認証情報や非公開データを渡しません。
+- X / Twitter の URL、DOM、選択文字列、ChatGPT Web の DOM、入力欄、送信ボタンは untrusted input / boundary として扱います。
+- 選択文には個人情報、機密情報、prompt injection 風の命令が含まれる可能性があります。固定 prompt は動的値を untrusted data として区切り、ContextFling 自身はその命令を実行しません。
+- ChatGPT Web への DOM handoff は公式の拡張機能 API ではありません。第三者サービスの保存・処理・規約は ContextFling の管理外です。
+- optional permission は正確な preview 後、設定ページから Service Worker へ送る同意 message の処理でだけ要求します。
+- 外部 GLM worker を使う場合も、公開済み clean repository の限定的な低リスク作業に限り、認証情報・個人情報・非公開データを渡しません。
 
 ## Security Invariants
 
-- API key、token、Cookie、秘密鍵、認証情報をコード、設定、fixture、ログ、
-  Issue、Pull Requestへ保存しません。
-- 権限は実装済み機能に必要な最小範囲に限定し、`<all_urls>`、`cookies`、
-  `history`、`bookmarks`、`webRequest`を使用しません。
-- ChatGPTへの送信は、ユーザーの明示操作と初回同意なしに開始しません。
-- 初回は送信内容と送信先を提示し、拒否された内容は保持しません。
-- 毎回ChatGPTの新規チャットを使用し、既存会話へ自動送信しません。
-- 自動送信の結果が不明な場合に再送せず、失敗時はクリップボードへ
-  フォールバックします。
-- 送信内容と投稿URLの履歴を拡張機能内へ保存しません。
-- ページ由来の値はテキストとして扱い、無検証でHTML、属性、コード実行、
-  任意のURL遷移へ渡しません。
-- remote code、`eval`、`new Function`、inline script、実行時の外部module
-  importを使用しません。
-- GLMは承認済みrouterのfail-closed判定を通し、cleanなPublic GitHub
-  リポジトリの限定的・低リスクな作業だけに使用します。
+- ChatGPT への送信は context menu と初回同意を起点にし、同意前の optional host / clipboard permission 要求と送信を行いません。
+- 送信先は `https://chatgpt.com/` の新規 tab だけです。既存会話、Cookie、token、auth state、API key、ChatGPT 履歴を読みません。
+- X / Twitter の URL は HTTPS、許可 host、status path または許可 origin の page fallback に正規化し、credentials、query、hash、status suffix を除去します。
+- selection は前後空白と改行を正規化し、8,000 UTF-16 code units を超える値を拒否します。URL、selection、prompt は `storage.session` の pending にのみ一時保存します。`expiresAt` の10分到達で論理失効し、終端イベントでは削除します。`alarms` を使わないため、期限到達だけで物理削除されるとは限らず、次の Service Worker 起床・関連イベント、または browser restart などで物理削除されます。
+- `storage.local` には `openInBackground` と `consentVersion` だけを保存し、送信履歴を作りません。
+- request ID ごとの operation を Service Worker 内で直列化し、`queued` → `injecting` の claim を保存します。`adapterAttemptedAt` を保存した payload は再実行しません。
+- consent / target tab は `about:blank` で作成し、tab ID と state を `storage.session` へ保存してから extension page / ChatGPT URL へ遷移します。保存前の tab を処理対象にしません。
+- adapter の送信結果が不明、DOM が変更、未ログイン、timeout になっても自動 retry しません。clipboard fallback は一度だけ書き、固定 banner で結果を伝えます。
+- `<all_urls>`、`tabs`、X / Twitter の恒久 host permission、`cookies`、`history`、`bookmarks`、`webRequest`、`notifications`、`alarms`、`clipboardRead` は使用しません。
+- page 由来の値を無検証で HTML、属性、コード、任意の URL 遷移へ渡しません。remote code、`eval`、`new Function`、inline script、実行時の外部 module import は使用しません。
+- API key、token、Cookie、秘密鍵、認証情報、個人データをコード、Manifest、fixture、ログ、Issue、Pull Request へ保存しません。
+
+## 実装上の確認点
+
+- `src/sources/x/` に selector を集約し、URL の許可・正規化は `src/core/url.ts`、選択文上限は `src/core/selection.ts`、固定 prompt は `src/core/prompt.ts` で検証します。
+- ChatGPT selector と DOM 操作は `src/destinations/chatgpt/` に閉じ込め、isolated world の bounded MutationObserver と timeout を使います。
+- 設定ページは preview の URL、選択文、prompt を text content として表示し、request ID や payload を DOM attribute へ入れません。Service Worker は settings page sender を検証して message を受けます。
+- offscreen clipboard page は static bundle で、runtime message 以外の拡張機能 API を扱いません。clipboard を読み取らず、request ID の重複書き込みを拒否します。
+- `npm run check:secrets` は高確度パターンを検査し、`.gitignore`、GitHub secret scanning、push protection と併用します。
+
+## Known Limitations and Compensating Controls
+
+- ChatGPT Web の DOM は公式・安定した連携仕様ではありません。selector、ログイン画面、入力欄、送信結果が変わると自動入力に失敗する可能性があります。adapter を分離し、retry 禁止、clipboard fallback、固定 banner で影響を限定します。
+- Chrome 実機での X→ChatGPT smoke test（ログイン済み / 未ログイン、前面 / 背景、tab close、DOM failure、clipboard success / failure、同意撤回）が未完了です。CWS 公開前の release gate とします。
+- `chrome.storage` は compare-and-swap を提供しないため、state read/write だけでは排他を保証できません。request ID ごとの直列化、claim ID、adapter attempt marker、期限検査を併用します。10分の TTL は論理失効であり、`alarms` を使わないため物理削除は次の Service Worker 起床・関連イベント、または browser restart などになり得ます。Service Worker 再起動後の stale `injecting` は自動再試行しません。
+- `npm run check:secrets` は未知・難読化された secret を完全には検出しません。変更差分と公開履歴をレビューし、secret が見つかった場合は無効化・履歴対応を優先します。
+- 第三者 ChatGPT Web が受け取ったデータの保持・利用・削除は本拡張機能から制御できません。ユーザーは秘密情報や個人情報を選択しないでください。
 
 ## Reportable Findings and Severity Context
 
 次の問題は報告対象です。
 
-- 同意なしのデータ取得、保存、送信
-- 選択範囲を越えたページ内容や認証情報へのアクセス
-- 意図しないChatGPTアカウント、既存会話、第三者hostへの送信
-- 二重送信、自動再試行、送信結果の誤表示
-- 広すぎる権限、host access、CSPの緩和
-- XSS、コード実行、remote code、prompt injectionから実操作へ至る経路
-- secret、credential、個人データのリポジトリまたはログへの漏えい
-- 開発依存、GitHub Actions、外部workerを経由した現実的なsupply-chain攻撃
+- 同意を回避した外部送信、任意 host への送信、既存会話・別アカウントへの誤送信
+- selection の範囲を越えたページ内容、Cookie、token、auth state、clipboard の読み取り
+- 二重送信、自動 retry、結果の誤表示、pending の削除漏れ、権限の意図しない拡大
+- XSS、remote code、任意コード実行、prompt injection から browser 操作へ至る経路
+- secret、credential、個人データのリポジトリ、生成物、Issue、ログへの漏えい
 
-認証情報の漏えい、同意を回避した外部送信、任意コード実行、広範な
-ブラウザデータへのアクセスは、到達可能性と影響に応じて重大度を高く扱います。
+認証情報の漏えい、同意なしの外部送信、任意コード実行、広範なブラウザデータアクセスは、到達可能性と影響に応じて重大度を高く扱います。
 
-## Out of Scope, Exclusions, and Accepted Risk
+## Out of Scope
 
-- ContextFlingを経由せず、X、ChatGPT、Chrome自体だけで成立する脆弱性
+- ContextFling を経由せず、X、ChatGPT、Chrome 自体だけで成立する脆弱性
 - 第三者サービスの一般的な停止や性能低下
-- データ漏えい、誤送信、権限拡大を伴わないselector変更による単純な機能停止
+- データ漏えい、誤送信、権限拡大を伴わない selector 変更による単純な機能停止
 
-ただし、第三者サービスの変更によってContextFlingが誤送信、安全でない
-fallback、意図しないデータアクセスを起こす場合は報告対象です。
-
-## Known Limitations and Compensating Controls
-
-- ChatGPT WebのDOM automationは公式の安定した連携仕様ではなく、壊れやすい
-  実験機能です。依存箇所をadapterへ限定し、明示同意、対象host限定、
-  自動再試行禁止、クリップボードfallback、実機回帰テストで補います。
-- `npm run check:secrets`は高確度パターンを検査しますが、未知または難読化された
-  secretを完全には検出できません。`.gitignore`、差分レビュー、GitHub secret
-  scanningとpush protectionを併用します。
+ただし、第三者サービスの変更によって ContextFling が誤送信、安全でない fallback、意図しないデータアクセスを起こす場合は報告対象です。
 
 ## 脆弱性の報告
 
-Public化後はGitHubのPrivate vulnerability reportingを優先してください。
-認証情報、個人情報、再現用secret、未修正の詳細をPublic Issueへ投稿しないでください。
+Public repository の機密性のある報告は GitHub Private vulnerability reporting を優先してください。公開 Issue は一般的な質問や再現に秘密を含まない報告だけに使います。token、Cookie、個人情報、再現用 secret、未修正の詳細を公開しないでください。

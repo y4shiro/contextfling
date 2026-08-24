@@ -1,0 +1,293 @@
+:root {
+  color-scheme: light;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #1f2933;
+  background: #f5f7fa;
+  font-synthesis: none;
+  line-height: 1.6;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: #f5f7fa;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+:focus-visible {
+  outline: 3px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+.page-shell {
+  width: min(100% - 32px, 760px);
+  margin: 0 auto;
+  padding: 40px 0 56px;
+}
+
+.page-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.eyebrow {
+  margin: 0;
+  color: #52606d;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  margin-bottom: 8px;
+  color: #102a43;
+  font-size: clamp(1.7rem, 4vw, 2.2rem);
+  line-height: 1.25;
+}
+
+h2 {
+  margin-bottom: 8px;
+  color: #243b53;
+  font-size: 1.05rem;
+  line-height: 1.35;
+}
+
+.lede {
+  max-width: 62ch;
+  margin-bottom: 28px;
+  color: #52606d;
+}
+
+.status {
+  min-height: 1.6em;
+  margin: 0;
+  color: #52606d;
+  font-size: 0.9rem;
+  text-align: right;
+}
+
+.status.is-error {
+  color: #a61b1b;
+}
+
+.settings-group,
+.notice,
+.preview-details {
+  margin: 0 0 20px;
+  border: 1px solid #d9e2ec;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.settings-group {
+  padding: 20px;
+}
+
+fieldset.settings-group {
+  min-width: 0;
+}
+
+fieldset.settings-group legend {
+  padding: 0 6px;
+  color: #243b53;
+  font-weight: 700;
+}
+
+.checkbox-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: #243b53;
+  font-weight: 600;
+}
+
+.checkbox-row input {
+  width: 18px;
+  height: 18px;
+  accent-color: #2563eb;
+}
+
+.help-text {
+  margin: 8px 0 0;
+  color: #627d98;
+  font-size: 0.9rem;
+}
+
+.consent-status {
+  margin-bottom: 0;
+  color: #334e68;
+  font-weight: 600;
+}
+
+.preview-details {
+  padding: 0 20px;
+}
+
+.preview-details > div {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.3fr) minmax(0, 1fr);
+  gap: 16px;
+  padding: 16px 0;
+  border-bottom: 1px solid #e6edf3;
+}
+
+.preview-details > div:last-child {
+  border-bottom: 0;
+}
+
+dt {
+  color: #52606d;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+dd {
+  min-width: 0;
+  margin: 0;
+  color: #243b53;
+}
+
+.breakable {
+  overflow-wrap: anywhere;
+}
+
+.preserve-whitespace {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.prompt-block {
+  max-height: 320px;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid #d9e2ec;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #102a43;
+  font:
+    0.9rem / 1.55 ui-monospace,
+    SFMono-Regular,
+    Consolas,
+    monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.notice {
+  padding: 20px 20px 20px 36px;
+  color: #486581;
+}
+
+.notice h2 {
+  margin-left: -16px;
+}
+
+.notice ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.notice li + li {
+  margin-top: 8px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 28px;
+}
+
+.primary-button,
+.secondary-button,
+.link-button {
+  min-height: 42px;
+  border-radius: 7px;
+  padding: 8px 16px;
+  font-weight: 700;
+}
+
+.primary-button {
+  border: 1px solid #1d4ed8;
+  background: #2563eb;
+  color: #fff;
+}
+
+.primary-button:not(:disabled):hover {
+  background: #1d4ed8;
+}
+
+.secondary-button {
+  border: 1px solid #9fb3c8;
+  background: #fff;
+  color: #243b53;
+}
+
+.secondary-button:not(:disabled):hover {
+  background: #f0f4f8;
+}
+
+.link-button {
+  border: 0;
+  background: transparent;
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
+@media (max-width: 560px) {
+  .page-shell {
+    width: min(100% - 20px, 760px);
+    padding-top: 24px;
+  }
+
+  .page-header {
+    display: block;
+  }
+
+  .status {
+    margin-top: 8px;
+    text-align: left;
+  }
+
+  .preview-details > div {
+    display: block;
+  }
+
+  dt {
+    margin-bottom: 6px;
+  }
+
+  .actions > button {
+    width: 100%;
+  }
+}

@@ -1,15 +1,17 @@
 # ADR 0001: 実験的 ChatGPT Web handoff
 
+> この ADR の `Context` と `Decision` は、2026-08-24 の実装前レビューで行った判断履歴です。現在の状態は v0.1.0 実装済み・自動検証済みですが、Chrome 実機 X→ChatGPT smoke test と Chrome Web Store 公開は未完了です。
+
 - Status: Accepted
 - Scope: v0.1
 - Date: 2026-08-24
 - Nature: Experimental / reversible
 
-> `Accepted` は設計を採用したことだけを示す。実装成功、Chrome Web Store の承認、ChatGPT または OpenAI の公式連携・保証を意味しない。実装前にレビュー可能な計画と受入条件を満たす必要がある。
+> `Accepted` は設計を採用したことだけを示す。実装成功、Chrome Web Store の承認、ChatGPT または OpenAI の公式連携・保証を意味しない。当時は実装前にレビュー可能な計画と受入条件を満たすことを条件とし、現在も実機確認と公開承認は別の gate とする。
 
 ## Context
 
-ContextFling の v0.1 は、X を閲覧中に選択した文章を ChatGPT Web の新規会話へ少ない操作で渡すことを目的とする。現行リポジトリは Manifest V3 の最小スキャフォールドであり、本 ADR は目標設計を記録するもので、現在の Manifest やコードへ権限・機能を追加するものではない。
+ContextFling の v0.1 は、X を閲覧中に選択した文章を ChatGPT Web の新規会話へ少ない操作で渡すことを目的とする。この Context 節は当時の実装前レビューにおけるリポジトリ状態と設計上の前提を記録する。現在はこの判断に基づく v0.1.0 実装があり、Manifest、設定、handoff、fallback、テストへ反映済みである。
 
 ChatGPT Web への入力と自動送信は、ChatGPT の非公開・非保証 DOM に依存する実験機能とする。公式 API、公式ブラウザ連携、OpenAI API を使う設計ではない。初回利用では、送信する URL と選択文章、宛先、DOM automation とクリップボード fallback のリスクを正確にプレビューし、ユーザーの明示同意後にだけ有効化する。
 
@@ -52,11 +54,11 @@ ChatGPT Web への入力と自動送信は、ChatGPT の非公開・非保証 DO
 
 ### Permission boundary
 
-実装時の permission の詳細と公式根拠は [v0.1 design](../architecture/v0.1-design.md) と [Chrome API verification](../architecture/chrome-api-verification.md) に記録する。
+実装した permission の詳細と公式根拠は [v0.1 design](../architecture/v0.1-design.md) と [Chrome API verification](../architecture/chrome-api-verification.md) に記録する。以下は当時の選択肢の記録であり、現在の v0.1.0 Manifest 値でもある。
 
-- Required candidate: `activeTab`, `contextMenus`, `scripting`, `storage`。
-- Optional candidate: `optional_host_permissions` の `https://chatgpt.com/*`、`optional_permissions` の `offscreen` と `clipboardWrite`。
-- Optional candidate は、同意画面のボタン操作からだけ要求する。`host_permissions` に X/Twitter を恒久的に追加しない。
+- Required（v0.1.0 実装値）: `activeTab`, `contextMenus`, `scripting`, `storage`。
+- Optional（v0.1.0 実装値）: `optional_host_permissions` の `https://chatgpt.com/*`、`optional_permissions` の `offscreen` と `clipboardWrite`。
+- Optional permission は、同意画面のボタン操作からだけ要求する。`host_permissions` に X/Twitter を恒久的に追加しない。
 - `tabs`、`notifications`、`alarms`、`clipboardRead`、`cookies`、`history`、`webRequest`、`<all_urls>` は使用しない。
 - OAuth、Cookie、ChatGPT の認証状態、API key は読まない。
 
@@ -73,6 +75,7 @@ ChatGPT Web adapter と selector は専用モジュールへ隔離する。対�
 - state は `awaitingConsent`、`queued`、`injecting` とする。同意済みの通常実行は直接 `queued`、preview が必要な実行は `awaitingConsent` から許可一式の確認後に `queued` へ進める。
 - `queued` から `injecting` への claim は、同一 Service Worker 内の処理を request ID ごとに直列化したうえで `claimId` を付けて一度だけ行う。`chrome.storage` に compare-and-swap があるとは仮定しない。二重イベントや Service Worker 再起動後の同じ payload は claim 済みとして無視する。
 - 成功、拒否、失敗、timeout、ChatGPT tab close、期限切れのすべてで payload を削除する。自動送信の retry はしない。
+- TTL は10分の論理失効とする。`alarms` は使用しないため、期限到達だけで `storage.session` の物理削除を保証せず、次の Service Worker 起床・関連イベント、または browser restart などで物理削除する。終端イベントでは削除する。
 
 ## Alternatives considered
 

@@ -2,7 +2,7 @@
 
 > Working Name（仮称）: ContextFling
 
-ContextFling は設計・実験段階の Chrome 拡張機能 OSS です。現時点では Chrome Web Store に未公開であり、将来計画を実装済みの機能として扱いません。Source、Destination、権限、handoff 方式などの未決定事項は、実装前に設計文書・ADR・受入条件を確認してください。
+ContextFling v0.1.0 は実装済みの Experimental Chrome 拡張機能 OSS です。Chrome Web Store は未公開で、Chrome 実機 X→ChatGPT smoke も未完了です。実装済みの Source、Destination、権限、handoff 方式を変更する場合は、設計文書・ADR・受入条件を確認してください。
 
 ## 変更前に確認すること
 
@@ -31,7 +31,7 @@ npm run check:secrets
 - Manifest V3 と最小権限を維持し、`<all_urls>` や不要な `tabs`、`storage`、host permissions を追加しない。
 - 外部通信、analytics、telemetry、remote code、API key、認証情報を機能コードへ追加しない。
 - ページ本文、選択テキスト、URL、DOM 属性、AI 由来の値は untrusted input として扱い、無検証で HTML やコードへ渡さない。
-- ChatGPT の非公開 DOM automation、入力欄の直接操作、送信ボタンの自動クリックは、Accepted ADR、明示的なユーザー同意、対象 host の限定、失敗時の安全な fallback、実機回帰テストが揃うまで実装しない。
+- ChatGPT の非公開 DOM automation、入力欄の直接操作、送信ボタンの自動クリックは、ADR 0001 の v0.1 Experimental scope 内に限って扱う。scope 外、対象 host 外、同意を省略した操作、retry は禁止し、変更時は明示的なユーザー同意、失敗時の安全な fallback、fixture / 回帰テストを更新する。実機回帰テスト未完了の状態で scope を拡張しない。
 - selector は責務ごとに集約し、DOM extraction を変更した場合は fixture と回帰テストを確認する。
 - 秘密情報をリポジトリへ追加しない。`.gitignore` の対象を確認し、コミット前に `npm run check:secrets` を実行する。`.env.example` には値ではなく安全な説明用プレースホルダーだけを置く。
 

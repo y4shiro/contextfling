@@ -1,9 +1,21 @@
 {
   "manifest_version": 3,
   "name": "ContextFling",
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "description": "Xで選択した文章を、新しいChatGPT Web会話で解説します。",
+  "minimum_chrome_version": "116",
+  "permissions": ["activeTab", "contextMenus", "scripting", "storage"],
+  "optional_permissions": ["offscreen", "clipboardWrite"],
+  "optional_host_permissions": ["https://chatgpt.com/*"],
+  "action": {
+    "default_title": "ContextFling の設定を開く"
+  },
+  "options_page": "settings/settings.html",
   "background": {
     "service_worker": "service-worker.js",
     "type": "module"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
   }
 }
