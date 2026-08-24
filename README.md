@@ -19,6 +19,14 @@ v0.1.1 の実装と自動検証（42 tests）は完了し、Chrome 実機で X�
 
 ChatGPT Web には公式の拡張機能連携 API を使っていません。ログイン状態、Cookie、token、既存会話は読み取りません。選択文と sanitized URL は、ユーザーの同意後に第三者である ChatGPT Web へ渡ります。詳細は [PRIVACY.md](PRIVACY.md) を確認してください。
 
+## 計画中の機能
+
+X / Twitter の単体ポストページ（`/<user>/status/<numeric-id>`）で、本文を選択せず通常のページ右クリックから `このポストをChatGPTで解説する` を起動する仕様を承認済みです。既存の選択範囲用 context menu、初回 exact preview、明示同意、optional permission、毎回新しい ChatGPT 会話、一回だけの送信、clipboard fallback、retry なし、pending cleanup は維持します。
+
+本文なし、非 status URL、selector mismatch / DOM 変更、8,000 UTF-16 code units 超は送信せず、X のページ上に明確な feedback を表示します。X / Twitter の恒久 host permission、常駐 content script、action icon からの即時実行、X 内の常設ボタンはこの仕様の対象外です。詳細は [単体ポスト右クリック実行 設計書](docs/architecture/single-post-context-menu.md)、[ADR 0002](docs/adr/0002-single-post-context-menu.md)、[実装 Issue #12](https://github.com/y4shiro/contextfling/issues/12) を参照してください。
+
+この機能は仕様承認済み・実装 pending であり、現行リリースの挙動にはまだ含まれません。
+
 ## 開発
 
 Node.js 24 以上と npm を使用します。実行時の外部ライブラリ依存はありません。
