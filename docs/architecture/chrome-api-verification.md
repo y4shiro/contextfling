@@ -13,6 +13,7 @@
 - [chrome.contextMenus](https://developer.chrome.com/docs/extensions/reference/api/contextMenus)
 - [chrome.permissions](https://developer.chrome.com/docs/extensions/reference/api/permissions)
 - [chrome.storage](https://developer.chrome.com/docs/extensions/reference/api/storage)
+- [Extension service worker lifecycle](https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle)
 - [chrome.offscreen](https://developer.chrome.com/docs/extensions/reference/api/offscreen)
 - [Permissions list (`clipboardWrite`)](https://developer.chrome.com/docs/extensions/reference/permissions-list)
 - [Manifest file format (`minimum_chrome_version`, host permissions)](https://developer.chrome.com/docs/extensions/reference/manifest)
