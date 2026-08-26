@@ -6,7 +6,7 @@ ContextFling は、X で選択した文章を新しい ChatGPT Web の会話へ�
 
 ## 現在の状態
 
-v0.1.1 の foreground 自動送信は Chrome 実機で成功を確認しています。一方、background では prompt 挿入後の自動送信と clipboard fallback が失敗しており、保証済みではありません。失敗経路を 64 tests で検証し、background 機能の撤回候補を [ADR 0003](docs/adr/0003-background-chatgpt-handoff-withdrawal.md) で検討中です。ChatGPT Web の DOM に依存する Experimental 機能であり、Chrome Web Store にはまだ公開していません。v0.1.0 は `about:blank` 完了イベントの既知 race を含むため非推奨です。
+v0.1.1 の失敗経路を 68 tests で検証しています。PR #13 の 2026-08-26 修正前 build の Chrome 実機 smoke では foreground / background とも prompt 挿入後の自動送信と clipboard fallback が失敗し、固定 banner が表示されました。いずれも send 前に fail-closed し、自動 retry と二重送信は発生していません。原因修正後の re-smoke まで保証済みではなく、安全側の no-op + 明示的 feedback、clipboard 成功時だけの paste-only、DOM 自動送信の維持・撤回を [ADR 0003](docs/adr/0003-background-chatgpt-handoff-withdrawal.md) で検討中です。ChatGPT Web の DOM に依存する Experimental 機能であり、Chrome Web Store にはまだ公開していません。v0.1.0 は `about:blank` 完了イベントの既知 race を含むため非推奨です。
 
 現行の主な挙動は次のとおりです。
 
@@ -68,7 +68,7 @@ GitHub Release の ZIP 配布は CWS 未公開の Experimental 配布です。CW
 4. X / Twitter 上の文章を選択し、右クリックの `ChatGPTで解説する` を実行します。
 5. 初回 preview で送信内容と宛先を確認し、同意するか拒否します。
 
-v0.1.1 では、実アカウントの機密情報を選択せずに foreground の X→ChatGPT 自動送信成功を実機確認済みです。background では prompt 挿入後の自動送信と clipboard fallback が失敗し、固定 banner、retry なし、二重送信なしを確認しています。追加確認では、非機密 diagnostics だけを使い、foreground / background、ChatGPT のログイン済み・未ログイン、DOM 変更、clipboard success / failure、同意撤回を確認してください。
+v0.1.1 では、実アカウントの機密情報を選択せずに実機 smoke を行っています。PR #13 の 2026-08-26 修正前 build では foreground / background とも prompt の視覚的挿入後に自動送信されず、clipboard fallback も `write-failed` で失敗しました。adapter diagnostics は両経路とも `selector-mismatch` / `phase=composer` / `attempted=false` / `composer-write-unconfirmed`、foreground の visible sample は composer 1・container attached・send 候補 1、background の hidden sample は composer attached・container unknown・send 候補 0 でした。固定 banner、retry なし、二重送信なしを確認しています。非機密 DOM 確認では contenteditable ProseMirror composer の直下 `p` 要素への段落正規化により、現行 `textContent` 完全一致 gate が複数行 prompt を誤って拒否することが最有力・実質特定されています。段落 plain-text 復元と offscreen 単回 DOM copy を実装し、68 tests で fail-closed と単回操作を検証しました。次に Chrome re-smoke を行います。re-smoke までは自動送信を成功扱いに戻さず、no-op + 明示的 feedback を安全側候補とし、clipboard success が確認できた場合だけ paste-only を再検討します。追加確認では、非機密 diagnostics だけを使い、ChatGPT のログイン済み・未ログイン、DOM 変更、clipboard success / failure、同意撤回を確認してください。
 
 ## 設計と制約
 

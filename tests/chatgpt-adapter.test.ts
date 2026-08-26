@@ -336,6 +336,201 @@ test("adapter は foreground で一度だけ送信し、非機密 diagnostics �
   }
 });
 
+test("contenteditable の ProseMirror 段落を復元して複数行と空行を一度だけ送信する", async () => {
+  const prompt = "first line\n\nthird line";
+  const installed = installDom(`
+    <!doctype html>
+    <html>
+      <body>
+        <div id="prompt-textarea" class="ProseMirror" contenteditable="true"></div>
+        <button data-testid="send-button" type="button">Send</button>
+      </body>
+    </html>
+  `);
+  try {
+    const composer =
+      installed.dom.window.document.querySelector("#prompt-textarea");
+    const button = installed.dom.window.document.querySelector(
+      'button[data-testid="send-button"]',
+    );
+    assert.ok(composer instanceof installed.dom.window.HTMLElement);
+    assert.ok(button instanceof installed.dom.window.HTMLButtonElement);
+
+    composer.addEventListener("input", () => {
+      queueMicrotask(() => {
+        composer.replaceChildren(
+          ...prompt.split("\n").map((line) => {
+            const paragraph = installed.dom.window.document.createElement("p");
+            if (line.length === 0) {
+              paragraph.setAttribute("data-empty-paragraph", "true");
+              paragraph.append(
+                installed.dom.window.document.createElement("br"),
+              );
+            } else {
+              paragraph.append(
+                installed.dom.window.document.createTextNode(line),
+              );
+            }
+            return paragraph;
+          }),
+        );
+      });
+    });
+
+    let clickCount = 0;
+    let submittedParagraphs: Array<{
+      readonly text: string;
+      readonly empty: boolean;
+    }> = [];
+    button.addEventListener("click", () => {
+      clickCount += 1;
+      submittedParagraphs = Array.from(composer.children).map((paragraph) => ({
+        text: paragraph.textContent ?? "",
+        empty: paragraph.hasAttribute("data-empty-paragraph"),
+      }));
+      composer.replaceChildren();
+    });
+
+    const result = await runChatGptAdapter(adapterInput(prompt));
+
+    assert.equal(result.status, "sent");
+    assert.equal(result.attempted, true);
+    assert.equal(clickCount, 1);
+    assert.deepEqual(submittedParagraphs, [
+      { text: "first line", empty: false },
+      { text: "", empty: true },
+      { text: "third line", empty: false },
+    ]);
+  } finally {
+    installed.cleanup();
+  }
+});
+
+test("contenteditable の readback が一文字でも変われば送信しない", async () => {
+  const prompt = "first line\n\nthird line";
+  const installed = installDom(`
+    <!doctype html>
+    <html>
+      <body>
+        <div id="prompt-textarea" class="ProseMirror" contenteditable="true"></div>
+        <button data-testid="send-button" type="button">Send</button>
+      </body>
+    </html>
+  `);
+  try {
+    const composer =
+      installed.dom.window.document.querySelector("#prompt-textarea");
+    const button = installed.dom.window.document.querySelector(
+      'button[data-testid="send-button"]',
+    );
+    assert.ok(composer instanceof installed.dom.window.HTMLElement);
+    assert.ok(button instanceof installed.dom.window.HTMLButtonElement);
+    composer.addEventListener("input", () => {
+      queueMicrotask(() => {
+        composer.replaceChildren(
+          ...prompt.split("\n").map((line, index) => {
+            const paragraph = installed.dom.window.document.createElement("p");
+            if (line.length === 0) {
+              paragraph.setAttribute("data-empty-paragraph", "true");
+              paragraph.append(
+                installed.dom.window.document.createElement("br"),
+              );
+            } else {
+              paragraph.append(
+                installed.dom.window.document.createTextNode(
+                  index === 0 ? "first linx" : line,
+                ),
+              );
+            }
+            return paragraph;
+          }),
+        );
+      });
+    });
+
+    let clickCount = 0;
+    button.addEventListener("click", () => {
+      clickCount += 1;
+    });
+
+    const result = await runChatGptAdapter(adapterInput(prompt));
+
+    assert.equal(result.status, "selector-mismatch");
+    assert.equal(
+      result.diagnostics.failureReason,
+      "composer-write-unconfirmed",
+    );
+    assert.equal(result.attempted, false);
+    assert.equal(clickCount, 0);
+  } finally {
+    installed.cleanup();
+  }
+});
+
+test("contenteditable に予期しない構造が入った場合は一致扱いにせず送信しない", async () => {
+  const prompt = "first line\n\nthird line";
+  const installed = installDom(`
+    <!doctype html>
+    <html>
+      <body>
+        <div id="prompt-textarea" class="ProseMirror" contenteditable="true"></div>
+        <button data-testid="send-button" type="button">Send</button>
+      </body>
+    </html>
+  `);
+  try {
+    const composer =
+      installed.dom.window.document.querySelector("#prompt-textarea");
+    const button = installed.dom.window.document.querySelector(
+      'button[data-testid="send-button"]',
+    );
+    assert.ok(composer instanceof installed.dom.window.HTMLElement);
+    assert.ok(button instanceof installed.dom.window.HTMLButtonElement);
+    composer.addEventListener("input", () => {
+      queueMicrotask(() => {
+        composer.replaceChildren(
+          ...prompt.split("\n").map((line, index) => {
+            const paragraph = installed.dom.window.document.createElement("p");
+            if (line.length === 0) {
+              paragraph.setAttribute("data-empty-paragraph", "true");
+              paragraph.append(
+                installed.dom.window.document.createElement("br"),
+              );
+            } else if (index === 0) {
+              const unexpected =
+                installed.dom.window.document.createElement("span");
+              unexpected.textContent = line;
+              paragraph.append(unexpected);
+            } else {
+              paragraph.append(
+                installed.dom.window.document.createTextNode(line),
+              );
+            }
+            return paragraph;
+          }),
+        );
+      });
+    });
+
+    let clickCount = 0;
+    button.addEventListener("click", () => {
+      clickCount += 1;
+    });
+
+    const result = await runChatGptAdapter(adapterInput(prompt));
+
+    assert.equal(result.status, "selector-mismatch");
+    assert.equal(
+      result.diagnostics.failureReason,
+      "composer-write-unconfirmed",
+    );
+    assert.equal(result.attempted, false);
+    assert.equal(clickCount, 0);
+  } finally {
+    installed.cleanup();
+  }
+});
+
 test("hidden document で handler が未準備なら一度の click 後に send-unknown となる", async () => {
   const markup = await readChatGptFixture("composer.html");
   const installed = installDom(markup, "hidden");

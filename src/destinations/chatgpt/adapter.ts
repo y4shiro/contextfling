@@ -354,14 +354,75 @@ export async function runChatGptAdapter(
     });
   };
 
-  const getComposerText = (element: Element): string => {
+  const getContentEditableText = (element: HTMLElement): string | null => {
+    const childNodes = Array.from(element.childNodes);
+    if (childNodes.length === 0) {
+      return "";
+    }
+    if (childNodes.every((child) => child.nodeType === 3)) {
+      return childNodes.map((child) => child.nodeValue ?? "").join("");
+    }
+
+    for (const child of childNodes) {
+      if (child.nodeType === 3 && (child.nodeValue ?? "").trim() === "") {
+        continue;
+      }
+      if (child.nodeType !== 1 || (child as Element).tagName !== "P") {
+        return null;
+      }
+    }
+
+    const paragraphs = Array.from(element.children);
+    const lines: string[] = [];
+    for (const paragraph of paragraphs) {
+      if (paragraph.tagName !== "P") {
+        return null;
+      }
+
+      const children = Array.from(paragraph.childNodes);
+      const isEmptyParagraph = paragraph.hasAttribute("data-empty-paragraph");
+      if (isEmptyParagraph) {
+        if (
+          children.length === 0 ||
+          (children.length === 1 &&
+            children[0]?.nodeType === 1 &&
+            (children[0] as Element).tagName === "BR")
+        ) {
+          lines.push("");
+          continue;
+        }
+        return null;
+      }
+
+      if (children.length === 0) {
+        return null;
+      }
+      let line = "";
+      for (const child of children) {
+        if (child.nodeType !== 3) {
+          return null;
+        }
+        line += child.nodeValue ?? "";
+      }
+      lines.push(line);
+    }
+    return lines.join("\n");
+  };
+
+  const getComposerText = (element: Element): string | null => {
     if (
       element instanceof HTMLTextAreaElement ||
       element instanceof HTMLInputElement
     ) {
       return element.value;
     }
-    return element.textContent ?? "";
+    if (
+      element instanceof HTMLElement &&
+      element.getAttribute("contenteditable") === "true"
+    ) {
+      return getContentEditableText(element);
+    }
+    return null;
   };
 
   const fillComposer = (element: Element, prompt: string): boolean => {
@@ -388,7 +449,10 @@ export async function runChatGptAdapter(
           }),
         );
         element.dispatchEvent(new Event("change", { bubbles: true }));
-      } else if (element instanceof HTMLElement) {
+      } else if (
+        element instanceof HTMLElement &&
+        element.getAttribute("contenteditable") === "true"
+      ) {
         element.textContent = prompt;
         element.dispatchEvent(
           new InputEvent("input", {
@@ -412,11 +476,11 @@ export async function runChatGptAdapter(
     composer: Element,
     deadlineMs: number,
   ): Promise<boolean> => {
-    if (
-      document.contains(composer) &&
-      getComposerText(composer).trim().length === 0
-    ) {
-      return true;
+    if (document.contains(composer)) {
+      const text = getComposerText(composer);
+      if (text !== null && text.trim().length === 0) {
+        return true;
+      }
     }
     const root = document.documentElement ?? document.body;
     if (!root) {
@@ -441,7 +505,8 @@ export async function runChatGptAdapter(
           finish(false);
           return;
         }
-        if (getComposerText(composer).trim().length === 0) {
+        const text = getComposerText(composer);
+        if (text !== null && text.trim().length === 0) {
           finish(true);
         }
       });
@@ -449,10 +514,12 @@ export async function runChatGptAdapter(
         // Background tabs can delay observer delivery. Read the final DOM
         // state once more at the deadline, but never treat a detached
         // composer as a successful send.
-        finish(
-          document.contains(composer) &&
-            getComposerText(composer).trim().length === 0,
-        );
+        let cleared = false;
+        if (document.contains(composer)) {
+          const text = getComposerText(composer);
+          cleared = text !== null && text.trim().length === 0;
+        }
+        finish(cleared);
       }, deadlineMs);
       observer.observe(root, {
         subtree: true,
