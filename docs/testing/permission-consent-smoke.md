@@ -56,14 +56,14 @@ P1–P8 の Chrome manual smoke は未完了であり、自動検証だけでは
 | ID | 結果 | 実機で確認した証跡 | 残存確認 |
 | --- | --- | --- | --- |
 | P1 | PASS | exact preview で「拒否して破棄する」を選び、「送信せずに破棄しました。」と表示された。現行 build の reject 経路は permission request を呼ばず、対応する pending を削除してから成功応答を返す。 | Chrome version は未記録。target tab 非生成は実装経路と自動テストで補完した。 |
-| P2 | BLOCKED | P5 後に「同意して送信する」を選んだが、Chrome permission prompt は表示されず bundle が再付与され、そのまま handoff が成功した。Chrome 公式は、削除済み permission の再要求では通常 prompt なしで再追加されると明記している。 | 拒否経路の実機確認には、optional bundle の許可履歴がない Chrome profile または別 extension ID が必要。拒否時 cleanup は自動テスト済み。 |
+| P2 | PASS | P5 後の元 extension ID では Chrome permission prompt が表示されず P4 の handoff が成功したため、現行 `dist/` の機械的コピーを許可履歴のない別 extension ID として読み込んだ。そこで「同意して送信する」後の permission prompt を拒否し、「必要な権限が許可されなかったため、送信せず破棄しました。」と表示された。 | Chrome version は未記録。コピー元と別 ID の `manifest.json` は SHA-256 一致を確認した。 |
 | P4 | PASS | exact preview の「同意して送信する」から、Chrome permission prompt なしで bundle が再付与され、ChatGPT への handoff が成功した。現行 build は Service Worker が bundle 一式を `contains()` で確認してから consent を保存し、一度だけ handoff する。 | Chrome version は未記録。prompt 非表示は以前の許可履歴がある場合のChrome公式仕様と一致する。 |
 | P5 | PASS | 拡張機能を再読み込み後、設定画面で同意を撤回し、「同意を撤回しました。次回に確認が必要です。」と表示された。現行 build は optional host、`offscreen`、`clipboardWrite` がすべて不在と再確認できた場合だけこの成功応答を返し、その前に consent version と全 pending を削除する。 | Chrome version は未記録。storage 値は DevTools で直接読み取っていない。 |
 | P6 | PASS | P5 後の新しい handoff で、実際の送信内容と宛先を示す exact preview、および「同意して送信する」「拒否して破棄する」が再表示された。 | P4 で再同意後の handoff も確認した。 |
 
 P1 の成功表示と実装経路から、permission request と ChatGPT target を作らず pending を削除する明示拒否を PASS とする。P4 では、再同意後に Service Worker の bundle 確認を通って handoff が成功した。P5 の成功表示と実装経路から、optional bundle の撤回確認、consent version と pending の cleanup を PASS とする。P6 では、新しい handoff が以前の同意を再利用せず exact preview と明示同意へ戻ることを確認した。
 
-P2 の prompt 非表示は Chrome 公式仕様と一致する。Chrome は permission warning がユーザーの未承認内容を増やす場合に prompt を表示し、`permissions.remove()` 後の `permissions.request()` は通常 prompt なしで permission を再追加する。したがって、同意撤回後も拡張機能独自の exact preview と明示同意は必須だが、Chrome prompt の再表示は保証しない。P2 の拒否実機 smoke は許可履歴のない環境へ分離する。
+P2 の元 extension ID での prompt 非表示は Chrome 公式仕様と一致する。Chrome は permission warning がユーザーの未承認内容を増やす場合に prompt を表示し、`permissions.remove()` 後の `permissions.request()` は通常 prompt なしで permission を再追加する。したがって、同意撤回後も拡張機能独自の exact preview と明示同意は必須だが、Chrome prompt の再表示は保証しない。許可履歴のない別 extension ID では prompt の拒否と送信せず破棄する終端を実機確認した。
 
 ## 記録フォーマット
 
