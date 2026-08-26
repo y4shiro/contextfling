@@ -1,6 +1,6 @@
 # Chrome Web Store 提出メモ — ContextFling
 
-> 最終更新: 2026-08-26
+> 最終更新: 2026-08-27
 >
 > v0.1.1 実装済み・Experimental。Chrome 実機では foreground 自動送信成功、background hidden document の送信前 fail-closed、clipboard DOM copy 成功を確認。ADR 0003 で foreground-only を採択。Chrome Web Store には未公開。
 
@@ -67,7 +67,7 @@ Chrome Web Store への提出・公開は絶対に自動化しません。CI、A
 | `offscreen` | optional | adapter 失敗時の同梱 offscreen clipboard fallback を作成する | 外部ページ、外部コード |
 | `clipboardWrite` | optional | fallback prompt を Clipboard API に一度だけ書く | clipboard の読み取り |
 
-optional permission は、preview の表示後に設定ページの approve button の同期 click handler から `chrome.permissions.request()` を直接呼びます。呼び出し前に await を置かず user gesture を保ち、要求の promise が解決した後に approve runtime message を送ります。Service Worker は message を受けた後に `chrome.permissions.contains()` で host / `offscreen` / `clipboardWrite` の bundle 一式を最終確認し、拒否または不足なら送信せず pending を削除します。storage 操作は Service Worker 経由に限定します。
+optional permission は、preview の表示後に設定ページの approve button の同期 click handler から `chrome.permissions.request()` を直接呼びます。呼び出し前に await を置かず user gesture を保ち、要求の promise が解決した後に approve runtime message を送ります。Service Worker は message を受けた後に `chrome.permissions.contains()` で host / `offscreen` / `clipboardWrite` の bundle 一式を最終確認し、拒否または不足なら送信せず pending を削除します。同意撤回では bundle の削除後に各 component を個別確認し、残存または確認失敗を成功表示しません。その場合も consent version と pending は削除します。storage 操作は Service Worker 経由に限定します。
 
 ## 使用しない権限・機能
 
@@ -112,7 +112,7 @@ DOM 失敗時には、bounded failure に限り同意済みの prompt を clipbo
 
 | バージョン | 日付 | 変更 | 状態 |
 | --- | --- | --- | --- |
-| 0.1.1 | 2026-08-24 / 2026-08-26 | `about:blank` 完了イベント race、ChatGPT handoff の失敗経路、ProseMirror composer readback、単回 clipboard fallback を修正。Chrome 実機で foreground の X→ChatGPT 自動送信成功、background hidden の fail-closed、clipboard DOM copy 成功を確認。ADR 0003 で foreground-only を採択。 | GitHub Experimental prerelease（ZIP） / CWS未公開 |
+| 0.1.1 | 2026-08-24 / 2026-08-27 | `about:blank` 完了イベント race、ChatGPT handoff の失敗経路、ProseMirror composer readback、単回 clipboard fallback、optional permission 撤回後の個別確認を修正。Chrome 実機で foreground の X→ChatGPT 自動送信成功、background hidden の fail-closed、clipboard DOM copy 成功を確認。ADR 0003 で foreground-only を採択。permission 撤回の追加実機 smoke は継続中。 | GitHub Experimental prerelease（ZIP） / CWS未公開 |
 | 0.1.0 | 2026-08-24 | X selection、preview / consent、ChatGPT Web Experimental handoff、clipboard fallback、設定画面、最小権限 Manifest を実装。 | Deprecated（`about:blank` 完了イベント race 既知） / CWS未公開 |
 | 0.0.0 | 2026-08-24 | Manifest V3 の初期スキャフォールド。 | Superseded |
 

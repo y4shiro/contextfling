@@ -15,7 +15,7 @@ ContextFling v0.1.1 は ChatGPT Web DOM automation を含む Experimental build 
 - X / Twitter の URL、DOM、選択文字列、ChatGPT Web の DOM、入力欄、送信ボタンは untrusted input / boundary として扱います。
 - 選択文には個人情報、機密情報、prompt injection 風の命令が含まれる可能性があります。固定 prompt は動的値を untrusted data として区切り、ContextFling 自身はその命令を実行しません。
 - ChatGPT Web への DOM handoff は公式の拡張機能 API ではありません。第三者サービスの保存・処理・規約は ContextFling の管理外です。
-- optional permission は正確な preview 後、設定ページから Service Worker へ送る同意 message の処理でだけ要求します。
+- optional permission は正確な preview 後、設定ページの approve button の同期 click handler からだけ要求し、要求結果の後に Service Worker が bundle 一式を再確認します。
 - 外部 GLM worker を使う場合も、公開済み clean repository の限定的な低リスク作業に限り、認証情報・個人情報・非公開データを渡しません。
 
 ## Security Invariants
@@ -24,7 +24,7 @@ ContextFling v0.1.1 は ChatGPT Web DOM automation を含む Experimental build 
 - 送信先は `https://chatgpt.com/` の新規 tab だけです。既存会話、Cookie、token、auth state、API key、ChatGPT 履歴を読みません。
 - X / Twitter の URL は HTTPS、許可 host、status path または許可 origin の page fallback に正規化し、credentials、query、hash、status suffix を除去します。
 - selection は前後空白と改行を正規化し、8,000 UTF-16 code units を超える値を拒否します。URL、selection、prompt は `storage.session` の pending にのみ一時保存します。`expiresAt` の10分到達で論理失効し、終端イベントでは削除します。`alarms` を使わないため、期限到達だけで物理削除されるとは限らず、次の Service Worker 起床・関連イベント、または browser restart などで物理削除されます。
-- `storage.local` には `openInBackground` と `consentVersion` だけを保存し、送信履歴を作りません。
+- `storage.local` には `consentVersion` だけを保存し、送信履歴を作りません。旧 `openInBackground` 値は読み取り・使用しません。
 - request ID ごとの operation を Service Worker 内で直列化し、`queued` → `injecting` の claim を保存します。`adapterAttemptedAt` を保存した payload は再実行しません。
 - consent / target tab は `about:blank` で作成し、tab ID と state を `storage.session` へ保存してから extension page / ChatGPT URL へ遷移します。保存前の tab を処理対象にしません。
 - adapter の送信結果が不明、DOM が変更、未ログイン、timeout になっても自動 retry しません。clipboard fallback は一度だけ書き、固定 banner で結果を伝えます。
@@ -38,6 +38,7 @@ ContextFling v0.1.1 は ChatGPT Web DOM automation を含む Experimental build 
 - ChatGPT selector と DOM 操作は `src/destinations/chatgpt/` に閉じ込め、isolated world の bounded MutationObserver と timeout を使います。
 - 設定ページは preview の URL、選択文、prompt を text content として表示し、request ID や payload を DOM attribute へ入れません。Service Worker は settings page sender を検証して message を受けます。
 - offscreen clipboard page は static bundle で、runtime message 以外の拡張機能 API を扱いません。clipboard を読み取らず、request ID の重複書き込みを拒否します。
+- 同意撤回では optional bundle の削除後に host、`offscreen`、`clipboardWrite` を個別確認し、残存または確認失敗を成功扱いにしません。consent version と pending は安全側で削除し、再利用時は新しい preview を要求します。
 - 失敗経路の diagnostics は Service Worker のローカル開発者 console にだけ、有限の status / phase / failure category、visibility、DOM attachment、候補数として出力します。selection、URL、prompt、clipboard 内容、account 情報、request / tab ID、例外本文は出力しません。telemetry や外部送信はありません。
 - `npm run check:secrets` は高確度パターンを検査し、`.gitignore`、GitHub secret scanning、push protection と併用します。
 

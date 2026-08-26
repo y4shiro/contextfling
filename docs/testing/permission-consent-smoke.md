@@ -1,6 +1,6 @@
 # Permission・consent 実機 smoke
 
-> Status: Draft
+> Status: Automated verification complete / Chrome manual smoke pending
 >
 > Tracking: [GitHub Issue #4](https://github.com/y4shiro/contextfling/issues/4)
 
@@ -35,6 +35,17 @@ optional permission と明示同意の境界が、許可・拒否・撤回の各
 | P6 | 撤回後の再利用 | P5 後に新しい handoff を開始する | exact preview と新しい明示同意を再度要求し、以前の同意を再利用しない |
 | P7 | consent tab close | preview 中に consent tab を閉じる | ChatGPT target を作らず、対応する pending を削除する |
 | P8 | Service Worker 再起動 | preview、approve、revoke の各境界で Service Worker を再読み込みする | permission / consent / pending の正本を storage と `contains` から復元し、二重送信しない |
+
+## 自動検証（2026-08-27）
+
+- `chrome.permissions.request()` が approve の同期 click handler から開始され、promise の完了前に approve message を送らないことを jsdom で確認した。
+- permission request の拒否・例外後も、Service Worker の bundle `contains` を最終判断とすることを確認した。
+- optional bundle の一部だけが残る状態と permission API の例外を成功扱いにしないことを確認した。
+- revoke では bundle を削除した後、optional host、`offscreen`、`clipboardWrite` を個別に再確認する。残存または確認失敗時も consent version と pending は削除し、権限撤回を確認できなかったことを表示する。
+- explicit reject、permission 不足、consent / target tab close、同意撤回後の再利用が pending cleanup または新しい preview へ進むことを確認した。
+- `npm test` は 84 tests、lint、typecheck、build、secret scan、diff check はすべて成功した。
+
+P1–P8 の Chrome manual smoke は未完了であり、自動検証だけでは Issue #4 を完了扱いにしない。
 
 ## 記録フォーマット
 

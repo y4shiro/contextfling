@@ -19,7 +19,11 @@ import {
   type OffscreenClipboardPort,
 } from "./handoff/fallback.js";
 import type { ClipboardWriteResponse } from "./offscreen/clipboard.js";
-import { OPTIONAL_PERMISSION_BUNDLE } from "./settings/permissions.js";
+import {
+  hasOptionalPermissionBundle,
+  OPTIONAL_PERMISSION_BUNDLE,
+  revokeOptionalPermissionBundle,
+} from "./settings/permissions.js";
 import {
   isSettingsMessage,
   type RuntimeResponse,
@@ -160,11 +164,7 @@ async function closeTabSafely(tabId: number | undefined): Promise<void> {
 }
 
 async function hasOptionalPermissions(): Promise<boolean> {
-  try {
-    return await chrome.permissions.contains(OPTIONAL_PERMISSION_BUNDLE);
-  } catch {
-    return false;
-  }
+  return hasOptionalPermissionBundle(chrome.permissions);
 }
 
 async function clearExpiredPending(): Promise<void> {
@@ -807,14 +807,21 @@ async function handleSettingsMessage(
           .map((tabId) => closeTabSafely(tabId)),
       ),
     );
-    try {
-      await chrome.permissions.remove(OPTIONAL_PERMISSION_BUNDLE);
-    } catch {
-      // The setting is cleared even if the permission was already absent.
-    }
+    const permissionRevoked = await revokeOptionalPermissionBundle(
+      chrome.permissions,
+    );
     await getSettingsStore().clearConsent();
     await Promise.all(pending.map((item) => removePending(item.id)));
-    sendRuntimeResponse(sendResponse, { ok: true, consentGranted: false });
+    sendRuntimeResponse(sendResponse, {
+      ok: permissionRevoked,
+      consentGranted: false,
+      ...(permissionRevoked
+        ? {}
+        : {
+            message:
+              "同意状態は削除しましたが、権限の撤回を確認できませんでした。Chrome の拡張機能設定を確認してください。",
+          }),
+    });
     return;
   }
 
