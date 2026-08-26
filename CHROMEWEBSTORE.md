@@ -67,7 +67,7 @@ Chrome Web Store への提出・公開は絶対に自動化しません。CI、A
 | `offscreen` | optional | adapter 失敗時の同梱 offscreen clipboard fallback を作成する | 外部ページ、外部コード |
 | `clipboardWrite` | optional | fallback prompt を Clipboard API に一度だけ書く | clipboard の読み取り |
 
-optional permission は、preview の表示後に設定ページの approve button の同期 click handler から `chrome.permissions.request()` を直接呼びます。呼び出し前に await を置かず user gesture を保ち、要求の promise が解決した後に approve runtime message を送ります。Service Worker は message を受けた後に `chrome.permissions.contains()` で host / `offscreen` / `clipboardWrite` の bundle 一式を最終確認し、拒否または不足なら送信せず pending を削除します。同意撤回では bundle の削除後に各 component を個別確認し、残存または確認失敗を成功表示しません。その場合も consent version と pending は削除します。storage 操作は Service Worker 経由に限定します。
+optional permission は、preview の表示後に設定ページの approve button の同期 click handler から `chrome.permissions.request()` を直接呼びます。呼び出し前に await を置かず user gesture を保ち、要求の promise が解決した後に approve runtime message を送ります。Service Worker は message を受けた後に `chrome.permissions.contains()` で host / `offscreen` / `clipboardWrite` の bundle 一式を最終確認し、拒否または不足なら送信せず pending を削除します。同意撤回では bundle の削除後に各 component を個別確認し、残存または確認失敗を成功表示しません。その場合も consent version と pending は削除します。Chrome は以前に許可した permission を削除後に再要求すると、確認 prompt なしで再付与する場合があります。この場合も、拡張機能は撤回後の新しい exact preview と明示同意を必須とし、以前の consent version を再利用しません。storage 操作は Service Worker 経由に限定します。
 
 ## 使用しない権限・機能
 

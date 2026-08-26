@@ -38,7 +38,7 @@ ContextFling v0.1.1 は ChatGPT Web DOM automation を含む Experimental build 
 - ChatGPT selector と DOM 操作は `src/destinations/chatgpt/` に閉じ込め、isolated world の bounded MutationObserver と timeout を使います。
 - 設定ページは preview の URL、選択文、prompt を text content として表示し、request ID や payload を DOM attribute へ入れません。Service Worker は settings page sender を検証して message を受けます。
 - offscreen clipboard page は static bundle で、runtime message 以外の拡張機能 API を扱いません。clipboard を読み取らず、request ID の重複書き込みを拒否します。
-- 同意撤回では optional bundle の削除後に host、`offscreen`、`clipboardWrite` を個別確認し、残存または確認失敗を成功扱いにしません。consent version と pending は安全側で削除し、再利用時は新しい preview を要求します。
+- 同意撤回では optional bundle の削除後に host、`offscreen`、`clipboardWrite` を個別確認し、残存または確認失敗を成功扱いにしません。consent version と pending は安全側で削除し、再利用時は新しい preview と明示同意を要求します。Chrome が以前の許可履歴に基づいて permission を prompt なしで再付与する場合も、この拡張機能独自の同意境界は省略しません。
 - 失敗経路の diagnostics は Service Worker のローカル開発者 console にだけ、有限の status / phase / failure category、visibility、DOM attachment、候補数として出力します。selection、URL、prompt、clipboard 内容、account 情報、request / tab ID、例外本文は出力しません。telemetry や外部送信はありません。
 - `npm run check:secrets` は高確度パターンを検査し、`.gitignore`、GitHub secret scanning、push protection と併用します。
 

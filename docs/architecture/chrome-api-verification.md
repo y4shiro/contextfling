@@ -1,6 +1,6 @@
 # Chrome API 公式仕様確認
 
-> 確認日: 2026-08-24
+> 確認日: 2026-08-24 / 2026-08-27
 >
 > Working Name（仮称）: ContextFling
 >
@@ -49,7 +49,9 @@ Offscreen API は Chrome 109+ MV3 で、`offscreen` permission と同梱 static 
 
 2026-08-27 に Chrome 公式 `permissions` API を再確認した。`remove()` は削除成否の boolean を返し、問題があれば promise を reject する。v0.1 は同意撤回時に bundle の `remove()` を呼んだ後、optional host、`offscreen`、`clipboardWrite` を個別の `contains()` で再確認する。残存または確認例外は撤回成功扱いにせず、consent version と pending を削除したうえでユーザーに Chrome の拡張機能設定確認を案内する。
 
-Chrome の permission request では origin の path は無視されるため、`https://chatgpt.com/*` は CWS と UI で ChatGPT origin に限定した host access として説明し、実機の permission prompt で確認する。X/Twitter の恒久 host permission は宣言しない。
+同じ公式ページは、permission warning がユーザーの未承認内容を増やす場合に prompt を表示し、permission を削除した後の `permissions.request()` は通常 prompt なしで permission を再追加すると明記している。2026-08-27 の実機 smoke でも、撤回後に拡張機能独自の exact preview は再表示された一方、approve 後の Chrome prompt は表示されず bundle が再付与された。したがって、同意撤回後の安全境界は「Chrome prompt の再表示」ではなく、「新しい exact preview と明示同意」「Service Worker の bundle 再確認」とする。permission 拒否の実機 smoke は optional bundle の許可履歴がない Chrome profile または別 extension ID で行う。
+
+Chrome の permission request では origin の path は無視されるため、`https://chatgpt.com/*` は CWS と UI で ChatGPT origin に限定した host access として説明する。permission warning の実機確認は許可履歴のない環境で行う。X/Twitter の恒久 host permission は宣言しない。
 
 ### `clipboardWrite`
 
