@@ -45,21 +45,21 @@ optional permission と明示同意の境界が、許可・拒否・撤回の各
 - explicit reject、permission 不足、consent / target tab close、同意撤回後の再利用が pending cleanup または新しい preview へ進むことを確認した。
 - `npm test` は 84 tests、lint、typecheck、build、secret scan、diff check はすべて成功した。
 
-Chrome manual smoke は P1、P2、P4–P8 が PASS、P3 は本番 UI から部分 permission の timing window を作れないため BLOCKED とし、自動検証で補完した。Issue #4 の完了判断前に最終 validation と Chrome version の記録を行う。
+Chrome manual smoke は P1、P2、P4–P8 が PASS、P3 は本番 UI から部分 permission の timing window を作れないため BLOCKED とし、自動検証で補完した。最終 validation と実機 version の記録も完了した。
 
 ## Chrome manual smoke（2026-08-27）
 
 - Extension: 0.1.1
-- Chrome: version 未記録
+- Chrome: 151.0.7922.140（公式ビルド、arm64）
 - fixture: 非機密データのみ（内容は記録しない）
 
 | ID | 結果 | 実機で確認した証跡 | 残存確認 |
 | --- | --- | --- | --- |
-| P1 | PASS | exact preview で「拒否して破棄する」を選び、「送信せずに破棄しました。」と表示された。現行 build の reject 経路は permission request を呼ばず、対応する pending を削除してから成功応答を返す。 | Chrome version は未記録。target tab 非生成は実装経路と自動テストで補完した。 |
-| P2 | PASS | P5 後の元 extension ID では Chrome permission prompt が表示されず P4 の handoff が成功したため、現行 `dist/` の機械的コピーを許可履歴のない別 extension ID として読み込んだ。そこで「同意して送信する」後の permission prompt を拒否し、「必要な権限が許可されなかったため、送信せず破棄しました。」と表示された。 | Chrome version は未記録。コピー元と別 ID の `manifest.json` は SHA-256 一致を確認した。 |
+| P1 | PASS | exact preview で「拒否して破棄する」を選び、「送信せずに破棄しました。」と表示された。現行 build の reject 経路は permission request を呼ばず、対応する pending を削除してから成功応答を返す。 | target tab 非生成は実装経路と自動テストで補完した。 |
+| P2 | PASS | P5 後の元 extension ID では Chrome permission prompt が表示されず P4 の handoff が成功したため、現行 `dist/` の機械的コピーを許可履歴のない別 extension ID として読み込んだ。そこで「同意して送信する」後の permission prompt を拒否し、「必要な権限が許可されなかったため、送信せず破棄しました。」と表示された。 | コピー元と別 ID の `manifest.json` は SHA-256 一致を確認した。 |
 | P3 | BLOCKED | Chrome の利用者向け permission UI は今回の bundle を一括で処理するため、`permissions.request()` 完了後から Service Worker の `contains()` までの間だけ一部 permission を不足させる再現手順がない。 | bundle 全体の `contains()` が false / 例外になる場合、個別 component が残る場合、consent 保存と handoff より先に pending を削除する順序は自動テスト済み。 |
-| P4 | PASS | exact preview の「同意して送信する」から、Chrome permission prompt なしで bundle が再付与され、ChatGPT への handoff が成功した。現行 build は Service Worker が bundle 一式を `contains()` で確認してから consent を保存し、一度だけ handoff する。 | Chrome version は未記録。prompt 非表示は以前の許可履歴がある場合のChrome公式仕様と一致する。 |
-| P5 | PASS | 拡張機能を再読み込み後、設定画面で同意を撤回し、「同意を撤回しました。次回に確認が必要です。」と表示された。現行 build は optional host、`offscreen`、`clipboardWrite` がすべて不在と再確認できた場合だけこの成功応答を返し、その前に consent version と全 pending を削除する。 | Chrome version は未記録。storage 値は DevTools で直接読み取っていない。 |
+| P4 | PASS | exact preview の「同意して送信する」から、Chrome permission prompt なしで bundle が再付与され、ChatGPT への handoff が成功した。現行 build は Service Worker が bundle 一式を `contains()` で確認してから consent を保存し、一度だけ handoff する。 | prompt 非表示は以前の許可履歴がある場合のChrome公式仕様と一致する。 |
+| P5 | PASS | 拡張機能を再読み込み後、設定画面で同意を撤回し、「同意を撤回しました。次回に確認が必要です。」と表示された。現行 build は optional host、`offscreen`、`clipboardWrite` がすべて不在と再確認できた場合だけこの成功応答を返し、その前に consent version と全 pending を削除する。 | storage 値は DevTools で直接読み取っていない。 |
 | P6 | PASS | P5 後の新しい handoff で、実際の送信内容と宛先を示す exact preview、および「同意して送信する」「拒否して破棄する」が再表示された。 | P4 で再同意後の handoff も確認した。 |
 | P7 | PASS | exact preview で操作せず consent tab を閉じた後、X から別の非機密 fixture で再起動し、新しい exact preview が正常に開いた。前の内容は送信されず、ChatGPT target も作成されなかった。 | pending の物理削除は tab close handler の実装経路と自動テストで補完した。 |
 | P8 | PASS | Service Worker DevTools を閉じ、exact preview を45秒以上操作せず待った後に「拒否して破棄する」を選び、「送信せずに破棄しました。」と表示された。[Chrome公式](https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle)の通常30秒のidle終了後も、次のmessageでpendingを読み直して終端できる利用者向け復帰を確認した。P5では拡張機能の再読み込み後にも撤回が成功し、P4では二重送信なくhandoffした。 | Service Workerの実終了時刻はDevToolsを開かず直接観測していない。approve/revoke境界のattempt marker、storage、`contains()`復元は自動テストで補完した。 |

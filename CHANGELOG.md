@@ -15,6 +15,7 @@
 
 - jsdom fixture で foreground、hidden document、delayed hydration、controlled input 未反映、DOM replacement / detached、send control 不在 / disabled / duplicate、synthetic click no-op、send-unknown を検証しました。
 - offscreen 未作成 / create race / create 後 unavailable、clipboard unavailable / write rejection、response failure、close failure、同時 fallback、Service Worker restart 相当の cleanup を検証しました。
+- Chrome 151.0.7922.140（arm64）で permission 拒否・許可・撤回・再同意、consent tab close、idle Service Worker 復帰を確認しました。部分 permission の timing window は利用者向け UI で再現できないため、自動テストで補完しました。
 - `npm test`: 84 tests passed。
 
 ## 0.1.1 - 2026-08-24（GitHub Experimental prerelease）

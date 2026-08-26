@@ -112,7 +112,7 @@ DOM 失敗時には、bounded failure に限り同意済みの prompt を clipbo
 
 | バージョン | 日付 | 変更 | 状態 |
 | --- | --- | --- | --- |
-| 0.1.1 | 2026-08-24 / 2026-08-27 | `about:blank` 完了イベント race、ChatGPT handoff の失敗経路、ProseMirror composer readback、単回 clipboard fallback、optional permission 撤回後の個別確認を修正。Chrome 実機で foreground の X→ChatGPT 自動送信成功、background hidden の fail-closed、clipboard DOM copy 成功を確認。ADR 0003 で foreground-only を採択。permission 撤回の追加実機 smoke は継続中。 | GitHub Experimental prerelease（ZIP） / CWS未公開 |
+| 0.1.1 | 2026-08-24 / 2026-08-27 | `about:blank` 完了イベント race、ChatGPT handoff の失敗経路、ProseMirror composer readback、単回 clipboard fallback、optional permission 撤回後の個別確認を修正。Chrome 実機で foreground の X→ChatGPT 自動送信成功、background hidden の fail-closed、clipboard DOM copy 成功を確認。ADR 0003 で foreground-only を採択。Chrome 151 で permission拒否・許可・撤回・再同意・tab close・idle Service Worker復帰を確認し、部分 permission timing は自動テストで補完。 | GitHub Experimental prerelease（ZIP） / CWS未公開 |
 | 0.1.0 | 2026-08-24 | X selection、preview / consent、ChatGPT Web Experimental handoff、clipboard fallback、設定画面、最小権限 Manifest を実装。 | Deprecated（`about:blank` 完了イベント race 既知） / CWS未公開 |
 | 0.0.0 | 2026-08-24 | Manifest V3 の初期スキャフォールド。 | Superseded |
 
@@ -120,7 +120,7 @@ DOM 失敗時には、bounded failure に限り同意済みの prompt を clipbo
 
 - ChatGPT Web DOM automation は公式連携ではなく、DOM 変更、React / ProseMirror state readiness、未ログイン、送信結果不明、利用条件、CWS 審査のリスクがあります。foreground-only でも fail-closed、send 最大一回、自動 retry なし、送信結果不明時の再送なしを維持します。
 - Chrome 116 以上で foreground の X→ChatGPT 自動送信成功は実機確認済みです。background hidden document は送信前に fail-closed し、clipboard DOM copy は成功しました。安全に実行できない状態は no-op + 明示的 feedback とし、background paste-only は次点の将来 Issue 候補です。
-- foreground-only 化後に target が前面で開くこと、旧 `openInBackground` 保存値を無視すること、logged-out、tab close、DOM failure、同意撤回、clipboard success / failure を追加確認する Release Gate が残っています。
+- permission/consent の拒否、許可、撤回、再同意、tab close、idle Service Worker 復帰は Chrome 151 で確認しました。foreground-only 化後に target が前面で開くこと、旧 `openInBackground` 保存値を無視すること、logged-out、DOM failure、clipboard success / failure を追加確認する Release Gate が残っています。
 - 正式名称、商標、掲載素材、Privacy Policy 公開 URL、連絡先、CWS data disclosure の最終入力が未完了です。
 - GitHub Release の ZIP は `dist/` の内容を直下にした手動配布物です。CWS への提出・公開を行う場合は、別の Release Gate とリリース単位のユーザー明示承認を完了し、ユーザーが手動操作します。
 - 追加実機シナリオと Security / Privacy review の結果により、Experimental scope を撤回または変更する可能性があります。変更時は ADR と関連文書を更新します。
