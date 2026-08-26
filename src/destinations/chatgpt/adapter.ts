@@ -23,6 +23,7 @@ export type ChatGptAdapterVisibilityState =
 export type ChatGptAdapterFailureReason =
   | "none"
   | "invalid-input"
+  | "document-not-visible"
   | "login-marker-visible"
   | "composer-timeout"
   | "composer-not-found"
@@ -165,6 +166,23 @@ export async function runChatGptAdapter(
     diagnostics: snapshotDiagnostics(failureReason),
   });
 
+  const checkDocumentVisibility = (
+    phase: ChatGptAdapterPhase,
+  ): ChatGptAdapterResult | null => {
+    const current = visibilityState();
+    diagnosticsState.visibilityState = current;
+    if (current === "visible") {
+      return null;
+    }
+    return result(
+      "selector-mismatch",
+      phase,
+      false,
+      "ChatGPT Web タブが前面にないため、送信せず終了しました。",
+      "document-not-visible",
+    );
+  };
+
   const invalid = (
     phase: ChatGptAdapterPhase,
     detail: string,
@@ -181,6 +199,15 @@ export async function runChatGptAdapter(
     !Array.isArray(input.selectors.loginMarker)
   ) {
     return invalid("validate", "prompt または selector registry が不正です。");
+  }
+
+  // A tab can be switched away from after it was created with `active: true`.
+  // ChatGPT's controlled input and event handlers are not safely observable
+  // while the document is hidden, so fail closed before reading or writing
+  // any page DOM. This is a gate, not a retry or a deferred attempt.
+  const initialVisibilityFailure = checkDocumentVisibility("composer");
+  if (initialVisibilityFailure) {
+    return initialVisibilityFailure;
   }
 
   const timeoutMs = Math.max(
@@ -585,6 +612,11 @@ export async function runChatGptAdapter(
     );
   }
 
+  const prefillVisibilityFailure = checkDocumentVisibility("composer");
+  if (prefillVisibilityFailure) {
+    return prefillVisibilityFailure;
+  }
+
   if (!fillComposer(composer, input.prompt)) {
     return result(
       "selector-mismatch",
@@ -796,6 +828,11 @@ export async function runChatGptAdapter(
       "送信ボタンが標準 DOM 要素ではありません。",
       "send-control-invalid",
     );
+  }
+
+  const presendVisibilityFailure = checkDocumentVisibility("send");
+  if (presendVisibilityFailure) {
+    return presendVisibilityFailure;
   }
 
   let clickDispatched = false;

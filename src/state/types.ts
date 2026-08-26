@@ -20,12 +20,10 @@ export interface PendingPayload {
 }
 
 export interface Settings {
-  readonly openInBackground: boolean;
   readonly consentVersion: ConsentVersion | null;
 }
 
 export const DEFAULT_SETTINGS: Settings = Object.freeze({
-  openInBackground: false,
   consentVersion: null,
 });
 

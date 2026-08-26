@@ -1,8 +1,8 @@
 # Chrome Web Store 提出メモ — ContextFling
 
-> 最終更新: 2026-08-24
+> 最終更新: 2026-08-26
 >
-> v0.1.1 実装済み・Experimental。Chrome 実機では foreground 自動送信成功、background の自動送信 / clipboard fallback 失敗を確認。Chrome Web Store には未公開。
+> v0.1.1 実装済み・Experimental。Chrome 実機では foreground 自動送信成功、background hidden document の送信前 fail-closed、clipboard DOM copy 成功を確認。ADR 0003 で foreground-only を採択。Chrome Web Store には未公開。
 
 ## 配布方針
 
@@ -18,7 +18,7 @@ Chrome Web Store への提出・公開は絶対に自動化しません。CI、A
 
 **短い説明（候補）**: X で選択した文章を、新しい ChatGPT Web 会話へ渡して解説を依頼します。
 
-**詳細な説明（候補）**: X / Twitter で文章を選択し、右クリックから ChatGPT Web の新しい会話へ渡します。初回は送信内容と宛先を確認してから同意できます。ChatGPT Web への受け渡しに失敗した場合は、手動貼り付け用の案内を表示します。送信履歴は拡張機能内に保存しません。
+**詳細な説明（候補）**: X / Twitter で文章を選択し、右クリックから ChatGPT Web の新しい会話へ渡します。ChatGPT tab は前面に開きます。初回は送信内容と宛先を確認してから同意できます。ChatGPT Web への受け渡しに失敗した場合は、手動貼り付け用の案内または明示的な失敗案内を表示します。送信履歴は拡張機能内に保存しません。
 
 ユーザー向け listing では、DOM selector や実装の詳細を過度に強調しません。ただし review notes、Privacy 開示、利用規約確認では、ChatGPT Web の非公式・Experimental な DOM 依存であることを正確に記載します。
 
@@ -62,7 +62,7 @@ Chrome Web Store への提出・公開は絶対に自動化しません。CI、A
 | `activeTab` | required | X / Twitter 上のユーザー操作時に、現在 tab の一時的な情報へアクセスする | X / Twitter の恒久アクセス |
 | `contextMenus` | required | 選択文用の `ChatGPTで解説する` menu を登録する | 複数の preset menu |
 | `scripting` | required | X の isolated-world URL extractor、同意後の ChatGPT adapter、固定 banner を実行する | remote code、任意サイト操作 |
-| `storage` | required | pending payload を session、設定と consent version を local に保存する | 送信・閲覧履歴の保存 |
+| `storage` | required | pending payload を session、consent version を local に保存する | 送信・閲覧履歴・表示設定の保存 |
 | `https://chatgpt.com/*` | optional host | exact preview と同意後だけ ChatGPT Web adapter / banner を限定 host へ注入する | X / Twitter や任意 host への注入 |
 | `offscreen` | optional | adapter 失敗時の同梱 offscreen clipboard fallback を作成する | 外部ページ、外部コード |
 | `clipboardWrite` | optional | fallback prompt を Clipboard API に一度だけ書く | clipboard の読み取り |
@@ -82,9 +82,9 @@ optional permission は、preview の表示後に設定ページの approve butt
 | 選択文（正規化後、最大 8,000 UTF-16 code units） | ChatGPT へ解説を依頼する | なし | `storage.session` の pending と処理中のみ |
 | sanitized X / Twitter URL | 選択文の参照元を prompt に含める | なし | 同上 |
 | 固定 prompt | preview と ChatGPT Web への handoff | なし | 同上 |
-| `openInBackground`、consent version | UI 設定と同意状態 | なし | `storage.local` |
+| consent version | 同意状態 | なし | `storage.local` |
 
-DOM 失敗時には、同意済みの prompt を clipboard に書く場合があります。拡張機能は clipboard を読みません。詳細な保持・削除・第三者境界は [PRIVACY.md](PRIVACY.md) に記載します。
+DOM 失敗時には、bounded failure に限り同意済みの prompt を clipboard に一度だけ書く場合があります。安全に実行できない状態では no-op + 明示的 feedback へ終端化します。拡張機能は clipboard を読みません。詳細な保持・削除・第三者境界は [PRIVACY.md](PRIVACY.md) に記載します。
 
 **ユーザーデータを収集するか**: 開発者による収集はありません。中核機能のためにユーザーが選択した文章と sanitized URL を一時処理し、同意後に ChatGPT Web へ渡します。
 
@@ -112,15 +112,15 @@ DOM 失敗時には、同意済みの prompt を clipboard に書く場合があ
 
 | バージョン | 日付 | 変更 | 状態 |
 | --- | --- | --- | --- |
-| 0.1.1 | 2026-08-24 | `about:blank` 完了イベント race を修正。Chrome 実機で foreground の X→ChatGPT 自動送信成功を確認。リリース時 42 tests。 | GitHub Experimental prerelease（ZIP） / CWS未公開 |
+| 0.1.1 | 2026-08-24 / 2026-08-26 | `about:blank` 完了イベント race、ChatGPT handoff の失敗経路、ProseMirror composer readback、単回 clipboard fallback を修正。Chrome 実機で foreground の X→ChatGPT 自動送信成功、background hidden の fail-closed、clipboard DOM copy 成功を確認。ADR 0003 で foreground-only を採択。 | GitHub Experimental prerelease（ZIP） / CWS未公開 |
 | 0.1.0 | 2026-08-24 | X selection、preview / consent、ChatGPT Web Experimental handoff、clipboard fallback、設定画面、最小権限 Manifest を実装。 | Deprecated（`about:blank` 完了イベント race 既知） / CWS未公開 |
 | 0.0.0 | 2026-08-24 | Manifest V3 の初期スキャフォールド。 | Superseded |
 
 ## Review notes と Release Gate
 
-- ChatGPT Web DOM automation は公式連携ではなく、DOM 変更、未ログイン、送信結果不明、利用条件、CWS 審査のリスクがあります。自動 retry はせず、clipboard fallback と banner を使います。
-- Chrome 116 以上で foreground の X→ChatGPT 自動送信成功は実機確認済みです。background は prompt 挿入まで成功しましたが、自動送信と clipboard fallback は失敗し、固定 banner と retry / 二重送信なしを確認しました。typed diagnostics による原因分離、logged-out、tab close、DOM failure、clipboard success / failure、同意撤回の追加確認を継続します。
-- background 機能の撤回候補は ADR 0003 で Proposed として比較中であり、CWS 提出前に foreground 限定、paste-only、no-op を含む方針を確定します。
+- ChatGPT Web DOM automation は公式連携ではなく、DOM 変更、React / ProseMirror state readiness、未ログイン、送信結果不明、利用条件、CWS 審査のリスクがあります。foreground-only でも fail-closed、send 最大一回、自動 retry なし、送信結果不明時の再送なしを維持します。
+- Chrome 116 以上で foreground の X→ChatGPT 自動送信成功は実機確認済みです。background hidden document は送信前に fail-closed し、clipboard DOM copy は成功しました。安全に実行できない状態は no-op + 明示的 feedback とし、background paste-only は次点の将来 Issue 候補です。
+- foreground-only 化後に target が前面で開くこと、旧 `openInBackground` 保存値を無視すること、logged-out、tab close、DOM failure、同意撤回、clipboard success / failure を追加確認する Release Gate が残っています。
 - 正式名称、商標、掲載素材、Privacy Policy 公開 URL、連絡先、CWS data disclosure の最終入力が未完了です。
 - GitHub Release の ZIP は `dist/` の内容を直下にした手動配布物です。CWS への提出・公開を行う場合は、別の Release Gate とリリース単位のユーザー明示承認を完了し、ユーザーが手動操作します。
 - 追加実機シナリオと Security / Privacy review の結果により、Experimental scope を撤回または変更する可能性があります。変更時は ADR と関連文書を更新します。

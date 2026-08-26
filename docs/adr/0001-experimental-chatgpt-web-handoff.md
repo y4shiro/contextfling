@@ -1,6 +1,6 @@
 # ADR 0001: 実験的 ChatGPT Web handoff
 
-> この ADR の `Context` と `Decision` は、2026-08-24 の実装前レビューで行った判断履歴です。現在は v0.1.1 の foreground 自動送信に実機成功しましたが、background の自動送信と clipboard fallback は失敗しており、撤回候補を [ADR 0003](0003-background-chatgpt-handoff-withdrawal.md) で検討中です。Chrome Web Store には未公開です。
+> この ADR の `Context` と `Decision` は、2026-08-24 の実装前レビューで行った判断履歴です。現在は v0.1.1 の foreground 自動送信に実機成功し、[ADR 0003](0003-background-chatgpt-handoff-withdrawal.md) で background 自動送信の撤回と foreground-only を採択しています。Chrome Web Store には未公開です。
 
 - Status: Accepted
 - Scope: v0.1
@@ -24,7 +24,7 @@ ChatGPT Web への入力と自動送信は、ChatGPT の非公開・非保証 DO
 3. 初回、同意バージョンが古い場合、または必要な optional permission が失効している場合は、最終的に送信される正規化済みの内容を `awaitingConsent` として一時保存し、拡張機能の設定・同意画面で、送信内容、宛先 `https://chatgpt.com/`、リスクを表示する。
 4. 同意画面のボタンの直接 user gesture から optional permission 一式を要求し、要求後に `chrome.permissions.contains()` で一式が揃ったことを確認する。拒否、画面 close、または不足がある場合は送信せず、pending payload を削除する。
 5. 同意済みなら毎回新しい `chatgpt.com` タブを開き、固定 prompt を一度だけ入力して送信する。既存会話は使わない。
-6. foreground が既定値で、設定で background を選べる。action click は Popup の即時実行ではなく設定画面を開く。
+6. target は常に foreground で開く。background 表示の設定 UI は設けない。action click は Popup の即時実行ではなく設定画面を開く。旧バージョンの `openInBackground` 保存値は読み取らず無視する。
 
 ### Input and URL normalization
 
@@ -64,7 +64,7 @@ ChatGPT Web への入力と自動送信は、ChatGPT の非公開・非保証 DO
 
 ### Handoff adapter and fallback
 
-ChatGPT Web adapter と selector は専用モジュールへ隔離する。対象 host への optional permission を得た tab にだけ isolated-world script を注入し、入力欄を探して一度だけ送信する。DOM 変更、未ログイン、permission 不足、入力欄不在、送信結果不明、timeout では自動再試行しない。
+ChatGPT Web adapter と selector は専用モジュールへ隔離する。対象 host への optional permission を得た foreground tab にだけ isolated-world script を注入し、入力欄を探して一度だけ送信する。DOM 変更、未ログイン、permission 不足、入力欄不在、送信結果不明、timeout では自動再試行しない。hidden document では adapter を実行しない。
 
 失敗時は、同じ固定 prompt を bundled static offscreen document の Clipboard API から clipboard に書き込む fallback を一度だけ試みる。ChatGPT tab には小さな banner で、DOM handoff の失敗と clipboard の成否を明示する。clipboard も失敗した場合は、その事実と手動貼り付けが必要なことを明示し、payload を削除する。Cookie や認証情報の読み取り、通知 permission、外部 backend は追加しない。
 
@@ -85,6 +85,7 @@ ChatGPT Web adapter と selector は専用モジュールへ隔離する。対�
 | paste-only を既定にする | DOM 依存を避けられるが、v0.1 の「新規 ChatGPT 会話へ渡す」実験目的を満たさない。安全な fallback として残す。 |
 | 既存 ChatGPT 会話を利用する | 誤った会話・アカウントへの送信と履歴混入のリスクがあり、毎回新規会話の要求に反する。 |
 | 恒久的な ChatGPT host permission | 常時 host access の範囲を広げるため、同意後の optional host permission に限定する。 |
+| background 表示設定を維持する | hidden document の React / ProseMirror state readiness と throttling を安全に保証できないため、[ADR 0003](0003-background-chatgpt-handoff-withdrawal.md) で撤回し foreground-only とする。 |
 | ChatGPT DOM automation を行わない | 最も保守的だが、v0.1 の実験目的を実装できない。DOM 変更、審査、同意、誤送信が発生したら撤回条件に従って paste-only または機能停止へ戻す。 |
 
 ## Consequences
@@ -98,14 +99,14 @@ ChatGPT Web adapter と selector は専用モジュールへ隔離する。対�
 ### Costs and risks
 
 - ChatGPT Web DOM は非公開・非保証で、変更により壊れる。
-- 自動送信の成功判定が不確実で、誤送信・二重送信・意図しない account のリスクがある。
+- 自動送信の成功判定が不確実で、誤送信・二重送信・意図しない account のリスクがある。foreground-only でもこのリスクは残るため、fail-closed と単回操作を維持する。
 - `chatgpt.com` への optional host permission と clipboardWrite は、初回同意と正確な preview が必要である。
 - offscreen document のライフサイクルと Clipboard API の失敗を扱う必要がある。
 - Chrome Web Store の審査、ChatGPT/OpenAI の利用条件、ユーザーへのデータ開示を別途再確認する必要がある。
 
 ## Withdrawal conditions
 
-次のいずれかが確認された場合は、自動送信を無効化し、paste-only または no-op へ戻す。必要なら本 ADR を Deprecated に更新する。
+次のいずれかが確認された場合は、自動送信を無効化し、option 5 の no-op + 明示的 feedback へ終端化する。paste-only を再導入する場合は別 ADR / Issue で判断し、必要なら本 ADR を Deprecated に更新する。
 
 - ChatGPT DOM 変更により送信先、内容、アカウントを安全に確認できない。
 - 初回 preview、明示同意、optional permission の境界を実装で保証できない。

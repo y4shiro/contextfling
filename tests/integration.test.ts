@@ -86,6 +86,7 @@ test("service worker は v0.1 の権限境界と一回限り終端を実装す�
     /document\.cookie|\bfetch\s*\(|\beval\s*\(|new\s+Function/,
   );
   assert.match(source, /MENU_DOCUMENT_URL_PATTERNS/);
+  assert.doesNotMatch(source, /openInBackground/);
   assert.match(source, /changeInfo\.url \?\? tab\.url/);
   assert.match(source, /navigationState === "pending"/);
   assert.match(source, /navigationState === "ready"/);
@@ -138,6 +139,7 @@ test("consent と target tab は state 保存後に目的 URL へ遷移する", 
   const lookupStart = source.indexOf("async function findPendingForTargetTab");
   const targetFlow = source.slice(launchStart, lookupStart);
   assert.match(targetFlow, /url: "about:blank"/);
+  assert.match(targetFlow, /active: true/);
   assert.ok(targetFlow.indexOf("await store.set(withTarget)") >= 0);
   assert.ok(
     targetFlow.indexOf("await store.set(withTarget)") <
@@ -160,6 +162,34 @@ test("adapter attempt marker と予期しない queue/target 例外は再送を�
     source,
     /async function processTargetTabOnce\([\s\S]*?catch \{[\s\S]*?removePending\(requestIdValue\)/,
   );
+});
+
+test("document-not-visible は clipboard fallback より前に固定 feedback と cleanup で終端する", async () => {
+  const source = await readFile(
+    resolve(projectRoot, "src/service-worker.ts"),
+    "utf8",
+  );
+  const processStart = source.indexOf(
+    "async function processTargetTabOnceUnsafe",
+  );
+  const nextFunctionStart = source.indexOf(
+    "async function processTargetTabOnce(",
+    processStart,
+  );
+  const processFlow = source.slice(processStart, nextFunctionStart);
+  const visibilityGate = processFlow.indexOf(
+    'adapterResult?.diagnostics.failureReason === "document-not-visible"',
+  );
+  const fallbackCall = processFlow.indexOf("await runFallback(");
+
+  assert.ok(processStart >= 0);
+  assert.ok(nextFunctionStart > processStart);
+  assert.ok(visibilityGate >= 0);
+  assert.ok(fallbackCall > visibilityGate);
+  const gateSource = processFlow.slice(visibilityGate, fallbackCall);
+  assert.match(gateSource, /show\(tabId, \{ kind: "dom-failure" \}\)/);
+  assert.match(gateSource, /removePending\(payload\.id\)/);
+  assert.doesNotMatch(gateSource, /fallbackCoordinator|writeText|runFallback/);
 });
 
 test("Service Worker restart 相当の attempt marker は再実行せず cleanup へ進む", () => {

@@ -531,9 +531,121 @@ test("contenteditable に予期しない構造が入った場合は一致扱い�
   }
 });
 
-test("hidden document で handler が未準備なら一度の click 後に send-unknown となる", async () => {
+test("hidden document では composer 書き込みと send click を行わず終了する", async () => {
   const markup = await readChatGptFixture("composer.html");
   const installed = installDom(markup, "hidden");
+  try {
+    const textarea = installed.dom.window.document.querySelector(
+      'textarea[data-testid="textbox"]',
+    );
+    const button = installed.dom.window.document.querySelector(
+      'button[data-testid="send-button"]',
+    );
+    assert.ok(textarea instanceof installed.dom.window.HTMLTextAreaElement);
+    assert.ok(button instanceof installed.dom.window.HTMLButtonElement);
+
+    let clickCount = 0;
+    button.addEventListener("click", () => {
+      clickCount += 1;
+    });
+
+    const result = await runChatGptAdapter(adapterInput());
+
+    assert.equal(result.status, "selector-mismatch");
+    assert.equal(result.phase, "composer");
+    assert.equal(result.attempted, false);
+    assert.equal(result.diagnostics.visibilityState, "hidden");
+    assert.equal(result.diagnostics.failureReason, "document-not-visible");
+    assert.equal(textarea.value, "");
+    assert.equal(clickCount, 0);
+  } finally {
+    installed.cleanup();
+  }
+});
+
+test("composer 書き込み前に hidden 化した場合は書き込みと送信を行わず終了する", async () => {
+  const markup = await readChatGptFixture("composer.html");
+  const installed = installDom(markup);
+  try {
+    const textarea = installed.dom.window.document.querySelector(
+      'textarea[data-testid="textbox"]',
+    );
+    const button = installed.dom.window.document.querySelector(
+      'button[data-testid="send-button"]',
+    );
+    assert.ok(textarea instanceof installed.dom.window.HTMLTextAreaElement);
+    assert.ok(button instanceof installed.dom.window.HTMLButtonElement);
+
+    let visibilityReads = 0;
+    Object.defineProperty(installed.dom.window.document, "visibilityState", {
+      configurable: true,
+      get: () => {
+        visibilityReads += 1;
+        return visibilityReads <= 2 ? "visible" : "hidden";
+      },
+    });
+    let clickCount = 0;
+    button.addEventListener("click", () => {
+      clickCount += 1;
+    });
+
+    const result = await runChatGptAdapter(adapterInput());
+
+    assert.equal(result.status, "selector-mismatch");
+    assert.equal(result.phase, "composer");
+    assert.equal(result.attempted, false);
+    assert.equal(result.diagnostics.visibilityState, "hidden");
+    assert.equal(result.diagnostics.failureReason, "document-not-visible");
+    assert.equal(textarea.value, "");
+    assert.equal(clickCount, 0);
+  } finally {
+    installed.cleanup();
+  }
+});
+
+test("書き込み後 send click 前に hidden 化した場合は再操作せず prompt を残す", async () => {
+  const markup = await readChatGptFixture("composer.html");
+  const installed = installDom(markup);
+  try {
+    const textarea = installed.dom.window.document.querySelector(
+      'textarea[data-testid="textbox"]',
+    );
+    const button = installed.dom.window.document.querySelector(
+      'button[data-testid="send-button"]',
+    );
+    assert.ok(textarea instanceof installed.dom.window.HTMLTextAreaElement);
+    assert.ok(button instanceof installed.dom.window.HTMLButtonElement);
+
+    let hidden = false;
+    Object.defineProperty(installed.dom.window.document, "visibilityState", {
+      configurable: true,
+      get: () => (hidden ? "hidden" : "visible"),
+    });
+    textarea.addEventListener("input", () => {
+      hidden = true;
+    });
+    let clickCount = 0;
+    button.addEventListener("click", () => {
+      clickCount += 1;
+    });
+
+    const result = await runChatGptAdapter(adapterInput());
+
+    assert.equal(result.status, "selector-mismatch");
+    assert.equal(result.phase, "send");
+    assert.equal(result.attempted, false);
+    assert.equal(result.diagnostics.visibilityState, "hidden");
+    assert.equal(result.diagnostics.failureReason, "document-not-visible");
+    assert.equal(textarea.value, "fixture prompt");
+    assert.equal(clickCount, 0);
+  } finally {
+    installed.cleanup();
+  }
+});
+
+test("visible document で handler が未準備なら一度の click 後に send-unknown となる", async () => {
+  const markup = await readChatGptFixture("composer.html");
+  const installed = installDom(markup);
   try {
     const button = installed.dom.window.document.querySelector(
       'button[data-testid="send-button"]',
@@ -553,7 +665,7 @@ test("hidden document で handler が未準備なら一度の click 後に send-
     assert.equal(result.phase, "send");
     assert.equal(result.attempted, true);
     assert.equal(clickCount, 1);
-    assert.equal(result.diagnostics.visibilityState, "hidden");
+    assert.equal(result.diagnostics.visibilityState, "visible");
     assert.equal(result.diagnostics.failureReason, "send-result-unknown");
     assert.equal(result.diagnostics.attachment.send, "attached");
   } finally {

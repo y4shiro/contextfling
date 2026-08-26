@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createPendingPayload } from "../src/state/machine.js";
 import { DEFAULT_SETTINGS } from "../src/state/types.js";
-import { LocalSettingsStore } from "../src/storage/local-store.js";
+import {
+  LocalSettingsStore,
+  SETTINGS_STORAGE_KEY,
+} from "../src/storage/local-store.js";
 import {
   PendingSessionStore,
   pendingStorageKey,
@@ -74,32 +77,38 @@ test("PendingSessionStore は pending だけを session に読み書きする", 
   assert.equal(await store.get("second"), null);
 });
 
-test("LocalSettingsStore は設定以外を保存せず、壊れた値を default に戻す", async () => {
+test("LocalSettingsStore は旧 background 設定を無視し consent version だけを維持する", async () => {
   const area = new MemoryStorageArea();
   const store = new LocalSettingsStore(area);
   assert.deepEqual(await store.get(), DEFAULT_SETTINGS);
   await area.set({
-    "contextfling.settings": {
+    [SETTINGS_STORAGE_KEY]: {
       openInBackground: true,
       consentVersion: "unknown",
     },
   });
+  assert.deepEqual(await store.get(), DEFAULT_SETTINGS);
+  await area.set({
+    [SETTINGS_STORAGE_KEY]: {
+      openInBackground: true,
+      consentVersion: "chatgpt-web-dom-v1",
+      ignoredSetting: "ignored",
+    },
+  });
   assert.deepEqual(await store.get(), {
-    openInBackground: true,
-    consentVersion: null,
+    consentVersion: "chatgpt-web-dom-v1",
   });
   const consented = await store.setConsentVersion("chatgpt-web-dom-v1");
   assert.deepEqual(consented, {
-    openInBackground: true,
     consentVersion: "chatgpt-web-dom-v1",
   });
-  const foreground = await store.setOpenInBackground(false);
-  assert.deepEqual(foreground, {
-    openInBackground: false,
-    consentVersion: "chatgpt-web-dom-v1",
-  });
+  assert.deepEqual(
+    (await area.get(SETTINGS_STORAGE_KEY))[SETTINGS_STORAGE_KEY],
+    {
+      consentVersion: "chatgpt-web-dom-v1",
+    },
+  );
   assert.deepEqual(await store.clearConsent(), {
-    openInBackground: false,
     consentVersion: null,
   });
 });

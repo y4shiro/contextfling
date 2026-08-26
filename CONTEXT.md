@@ -6,7 +6,7 @@
 
 ## 現在の状態
 
-v0.1.1 のコード、設定画面、X URL 抽出、固定 prompt、ChatGPT Web adapter、clipboard fallback、state machine、テスト、build は実装済みです。Chrome 実機では foreground 自動送信に成功しましたが、background は prompt 挿入後の自動送信と clipboard fallback に失敗しており、未保証です。Chrome Web Store には未公開で、ChatGPT Web DOM automation は公式連携ではない Experimental scope です。
+v0.1.1 のコード、設定画面、X URL 抽出、固定 prompt、ChatGPT Web adapter、clipboard fallback、state machine、テスト、build は実装済みです。Chrome 実機では foreground 自動送信に成功し、background hidden document は composer write gate で fail-closed、clipboard DOM copy は成功しました。この結果を受け、[ADR 0003](docs/adr/0003-background-chatgpt-handoff-withdrawal.md) で background 自動送信を撤回し、foreground-only を採択しました。Chrome Web Store には未公開で、ChatGPT Web DOM automation は公式連携ではない Experimental scope です。
 
 ## 目的
 
@@ -31,7 +31,7 @@ Chrome で閲覧中の X / Twitter の選択文章を、コピーや画面遷移
 2. HTTPS の `x.com`、`twitter.com` と `www` host だけを許可し、status URL は query/hash と status suffix を除去します。status link が得られないときは許可 origin の current page URL を fallback にします。
 3. sanitized URL と selection だけを固定 prompt に埋め込みます。ファクトチェック要求、回答言語指定、著者・日時・DOM 全文は含めません。
 4. 初回は exact preview を設定ページに表示します。approve button の同期 click handler が `chrome.permissions.request()` で optional permission bundle を直接要求し、promise 解決後に approve runtime message を送ります。Service Worker は `chrome.permissions.contains()` で bundle 一式を最終確認し、拒否・不足・画面 close・期限切れでは送信せず pending を削除します。storage 操作は Service Worker 経由です。
-5. 同意後は `about:blank` の新規 tab を作り、target tab ID を state に保存してから `https://chatgpt.com/` へ遷移します。前面表示が既定で、設定から背景表示を選べます。
+5. 同意後は `about:blank` の新規 tab を作り、target tab ID を state に保存してから `https://chatgpt.com/` へ遷移します。target は常に前面表示です。adapter 実行時に document が hidden なら、prompt の書き込みと送信前に停止します。
 6. `chatgpt.com` の selector registry に限定した adapter を一度だけ実行します。未ログイン、DOM 変更、timeout、送信結果不明では retry せず、clipboard fallback と固定 banner を使います。
 
 ## 権限と外部境界
@@ -50,7 +50,7 @@ X / Twitter の恒久 host permission、`tabs`、`notifications`、`alarms`、`c
 - pending payload は `storage.session` に保存し、`awaitingConsent`、`queued`、`injecting` と期限を持ちます。TTL は 10 分です。
 - payload の state fields は `id`、`state`、`sourceUrl`、`selectionText`、`prompt`、`createdAt`、`expiresAt`、任意の `consentTabId`、`claimId`、`targetTabId`、`adapterAttemptedAt` です。
 - success、拒否、permission 不足、失敗、timeout、consent / target tab close、expiry で削除します。送信履歴は作りません。
-- `storage.local` には `openInBackground` と `consentVersion` だけを保存します。同意撤回では optional permission を削除し、consent version と pending を消します。
+- `storage.local` には `consentVersion` だけを保存します。同意撤回では optional permission を削除し、consent version と pending を消します。旧バージョンの `openInBackground` が残っていても読み取り・使用せず、再保存もしません。
 
 ## 実装上の安全境界
 
@@ -61,9 +61,9 @@ X / Twitter の恒久 host permission、`tabs`、`notifications`、`alarms`、`c
 
 ## 未完了・既知の制限
 
-- Chrome 実機で foreground 自動送信は成功済みです。background では prompt 挿入まで成功し、自動送信と clipboard fallback は失敗、固定 banner と retry / 二重送信なしを確認しました。adapter / clipboard の typed diagnostics を使った再確認、logged-out、DOM 変更、tab close、同意撤回は未完了です。
+- Chrome 実機で foreground 自動送信は成功済みです。background hidden document では prompt 残留と `composer-write-unconfirmed` による送信前 fail-closed、clipboard DOM copy の成功、固定 banner、retry / 二重送信なしを確認しました。foreground-only 化後の target 前面表示、旧保存値無視、logged-out、DOM 変更、tab close、同意撤回は実機 gate として残ります。
 - 非機密 diagnostics は Service Worker の開発者 console にだけ出力し、adapter status / phase / typed reason / visibility / DOM attachment /候補数と clipboard category だけを含みます。selection、URL、prompt、clipboard 内容、account 情報、request ID、tab ID は含めず、保存・送信もしません。
-- background 自動送信の維持、foreground 限定、paste-only、no-op は [ADR 0003](docs/adr/0003-background-chatgpt-handoff-withdrawal.md) で Proposed として比較中です。現行設定は Human maintainer の判断前に変更していません。
+- background 自動送信の撤回と foreground-only は [ADR 0003](docs/adr/0003-background-chatgpt-handoff-withdrawal.md) で Accepted です。安全に実行できない状態は option 5 の no-op + 明示的 feedback へ終端化します。background paste-only は次点の将来 Issue 候補であり、現行仕様へ追加しません。
 - ChatGPT Web の DOM は公式安定 API ではなく、selector 変更で自動入力が失敗する可能性があります。
 - 正式名称、商標、CWS 掲載文言、Privacy Policy 公開 URL、サポート窓口、スクリーンショット、公開時期は未確定です。
 - v0.1.0 の Experimental scope を変更する場合は [ADR 0001](docs/adr/0001-experimental-chatgpt-web-handoff.md) と [v0.1 設計書](docs/architecture/v0.1-design.md) を更新します。

@@ -2,11 +2,11 @@
 
 > Working Name（仮称）: ContextFling
 >
-> 最終更新: 2026-08-24
+> 最終更新: 2026-08-26
 
 ## 状態と適用範囲
 
-ContextFling v0.1.1 は実装済みの Experimental Chrome 拡張機能 OSS です。Chrome 実機では foreground 自動送信に成功しましたが、background の自動送信と clipboard fallback は失敗しており未保証です。Chrome Web Store には公開していません。この文書は、現在のリポジトリにある実装のデータフローを説明します。正式名称、公開 URL、連絡先は CWS 提出前に確定します。
+ContextFling v0.1.1 は実装済みの Experimental Chrome 拡張機能 OSS です。Chrome 実機では foreground 自動送信に成功し、background hidden document は送信前に fail-closed、clipboard DOM copy は成功しました。この結果を受け、background 自動送信を撤回し、foreground-only を採択しています。Chrome Web Store には公開していません。この文書は、採択したデータフローと privacy 境界を説明します。正式名称、公開 URL、連絡先は CWS 提出前に確定します。
 
 ## データフロー
 
@@ -16,7 +16,7 @@ ContextFling は、ユーザーが X / Twitter 上で文章を選択し、右ク
 2. 選択位置に近い X / Twitter status URL を調べます。HTTPS の許可 host と status path だけを通し、credentials、query、hash、status id より後ろの suffix を除去します。status link が得られない場合は、許可された current page URL を同じ境界で sanitize します。
 3. sanitized URL と選択文だけを固定 prompt に埋め込みます。選択文は untrusted data として扱い、選択文内の命令やコードを ContextFling 自身が実行することはありません。
 4. 初回は設定ページに、実際に送る prompt、sanitized URL、選択文、宛先 `https://chatgpt.com/`、非公式 DOM automation と clipboard fallback のリスクを表示します。
-5. ユーザーが明示的に同意した後、毎回新しい ChatGPT Web tab を開き、ChatGPT Web の入力欄への DOM 入力と送信を一度だけ試行します。選択文と prompt は第三者である ChatGPT Web に渡ります。
+5. ユーザーが明示的に同意した後、毎回新しい ChatGPT Web の foreground tab を開き、ChatGPT Web の入力欄への DOM 入力と送信を一度だけ試行します。adapter 実行時に document が hidden なら、prompt の書き込みと送信前に停止します。選択文と prompt は第三者である ChatGPT Web に渡ります。
 
 ContextFling の開発者や独自 backend が、選択文、URL、prompt、ChatGPT の応答を受け取ることはありません。X API、OpenAI API、analytics、telemetry、広告、remote config も使用しません。ただし、ChatGPT Web は本拡張機能の管理外の第三者サービスです。送信後の保存、利用、学習、削除は ChatGPT / OpenAI のサービス条件と Privacy Policy の対象になります。
 
@@ -36,16 +36,17 @@ TTL は 10 分です。`expiresAt` 到達後は論理的に失効し、処理対
 
 ### `storage.local` の設定
 
-`storage.local` に保存するのは次の設定だけです。
+`storage.local` に保存するのは次の同意状態だけです。
 
-- `openInBackground`: ChatGPT tab を背景で開くかどうか（既定は前面）
 - `consentVersion`: 同意済みの Experimental handoff version、または `null`
+
+旧バージョンの `openInBackground` が保存されていても読み取り・使用せず、foreground 動作へ移行します。新しい保存や migration write は行いません。
 
 同意を撤回すると、pending を削除し、optional permission を削除し、consent version を `null` に戻します。設定画面で選択文や URL を保存することはありません。
 
 ## Clipboard fallback
 
-ChatGPT Web の入力欄が見つからない、未ログイン、DOM が変更された、timeout、送信結果が不明などの場合、自動再送は行いません。同意済みの prompt を同梱 offscreen document から Clipboard API へ一度だけ書き、ChatGPT tab 内の固定 banner で手動貼り付けを案内します。
+ChatGPT Web の入力欄が見つからない、未ログイン、DOM が変更された、timeout、送信結果が不明などの場合、自動再送は行いません。安全に保証できる bounded failure では、同意済みの prompt を同梱 offscreen document から clipboard へ一度だけ書き、ChatGPT tab 内の固定 banner で手動貼り付けを案内します。送信・clipboard の追加操作を安全に保証できない状態では、option 5 の no-op + 明示的 feedback へ終端化します。
 
 ContextFling は clipboard を読みません。ユーザーが上書きするまで、OS や他のアプリが clipboard 内容を保持する可能性があります。clipboard fallback を望まない場合は、権限を許可せず preview を拒否してください。
 

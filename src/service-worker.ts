@@ -414,6 +414,7 @@ function isAdapterFailureReason(
   return (
     value === "none" ||
     value === "invalid-input" ||
+    value === "document-not-visible" ||
     value === "login-marker-visible" ||
     value === "composer-timeout" ||
     value === "composer-not-found" ||
@@ -628,6 +629,15 @@ async function processTargetTabOnceUnsafe(
     await removePending(payload.id);
     return;
   }
+  if (adapterResult?.diagnostics.failureReason === "document-not-visible") {
+    // Foreground-only is a safety boundary: do not copy to the clipboard or
+    // attempt any other handoff while the target document is hidden.
+    await createBannerPort()
+      .show(tabId, { kind: "dom-failure" })
+      .catch(() => undefined);
+    await removePending(payload.id);
+    return;
+  }
   const cause: Exclude<ChatGptAdapterStatus, "sent" | "invalid-input"> =
     adapterResult?.status ?? "selector-mismatch";
   await runFallback(attempted, tabId, cause);
@@ -675,7 +685,7 @@ async function launchQueuedOnce(requestIdValue: string): Promise<void> {
   try {
     target = await chrome.tabs.create({
       url: "about:blank",
-      active: !settings.openInBackground,
+      active: true,
     });
   } catch {
     await removePending(requestIdValue);
@@ -770,7 +780,6 @@ function settingsSnapshot(
 ) {
   return {
     consentVersion: settings.consentVersion,
-    openInBackground: settings.openInBackground,
   };
 }
 
@@ -785,23 +794,6 @@ async function handleSettingsMessage(
       ok: true,
       settings: settingsSnapshot(settings),
     });
-    return;
-  }
-  if (message.type === SETTINGS_MESSAGE_TYPES.updateSettings) {
-    try {
-      const settings = await getSettingsStore().setOpenInBackground(
-        message.openInBackground,
-      );
-      sendRuntimeResponse(sendResponse, {
-        ok: true,
-        settings: settingsSnapshot(settings),
-      });
-    } catch {
-      sendRuntimeResponse(sendResponse, {
-        ok: false,
-        message: "設定を保存できませんでした。",
-      });
-    }
     return;
   }
   if (message.type === SETTINGS_MESSAGE_TYPES.revokeConsent) {
