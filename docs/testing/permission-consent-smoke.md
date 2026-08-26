@@ -27,10 +27,10 @@ optional permission と明示同意の境界が、許可・拒否・撤回の各
 
 | ID | 経路 | 操作 | 期待結果 |
 | --- | --- | --- | --- |
-| P1 | 明示拒否 | exact preview で「送信しない」を選ぶ | permission request を開始せず、ChatGPT target を作らず、pending を削除する |
+| P1 | 明示拒否 | exact preview で「拒否して破棄する」を選ぶ | permission request を開始せず、ChatGPT target を作らず、pending を削除する |
 | P2 | permission 拒否 | approve 操作から permission prompt を開き、拒否する | consent を保存せず、ChatGPT へ送信せず、pending を削除する |
 | P3 | permission 不足 | optional bundle の一部が不足した状態を再現する | Service Worker の bundle `contains` が失敗し、consent を保存せず、送信せず、pending を削除する |
-| P4 | permission 許可 | exact preview 後の approve 操作から bundle 一式を許可する | Service Worker が bundle 一式を再確認し、consent を保存して一度だけ handoff を開始する |
+| P4 | permission 許可 | exact preview で「同意して送信する」を選び、bundle 一式を許可する | Service Worker が bundle 一式を再確認し、consent を保存して一度だけ handoff を開始する |
 | P5 | 同意撤回 | 設定画面で同意を撤回する | optional bundle、consent version、全 pending を削除し、関連 consent / target tab を閉じる |
 | P6 | 撤回後の再利用 | P5 後に新しい handoff を開始する | exact preview と新しい明示同意を再度要求し、以前の同意を再利用しない |
 | P7 | consent tab close | preview 中に consent tab を閉じる | ChatGPT target を作らず、対応する pending を削除する |
@@ -56,8 +56,9 @@ P1–P8 の Chrome manual smoke は未完了であり、自動検証だけでは
 | ID | 結果 | 実機で確認した証跡 | 残存確認 |
 | --- | --- | --- | --- |
 | P5 | PASS | 拡張機能を再読み込み後、設定画面で同意を撤回し、「同意を撤回しました。次回に確認が必要です。」と表示された。現行 build は optional host、`offscreen`、`clipboardWrite` がすべて不在と再確認できた場合だけこの成功応答を返し、その前に consent version と全 pending を削除する。 | Chrome version は未記録。storage 値は DevTools で直接読み取っていない。 |
+| P6 | PASS | P5 後の新しい handoff で、実際の送信内容と宛先を示す exact preview、および「同意して送信する」「拒否して破棄する」が再表示された。 | P1 または P4 の終端操作は別途確認する。 |
 
-P5 の成功表示と実装経路から、optional bundle の撤回確認、consent version と pending の cleanup を PASS とする。P6 で、新しい handoff が以前の同意を再利用せず exact preview に戻ることを続けて確認する。
+P5 の成功表示と実装経路から、optional bundle の撤回確認、consent version と pending の cleanup を PASS とする。P6 では、新しい handoff が以前の同意を再利用せず exact preview と明示同意へ戻ることを確認した。
 
 ## 記録フォーマット
 
