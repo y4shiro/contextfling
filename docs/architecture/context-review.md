@@ -73,19 +73,19 @@
 | 旧レビュー時の空の permission baseline と v0.1 permission matrix | v0.1.0 実装で matrix を Manifest、permission test、CWS、Privacy へ反映済み。今後の permission 追加は同じ文書同期とレビューを要求する。 |
 | `storage.session` は pending を置くが「履歴を残さない」 | session は送信中の一時 payload のみ。成功・拒否・失敗・timeout・tab close・expiry で削除し、local/sync に本文・URL・prompt を置かない。 |
 | ChatGPT に送る利便性と第三者サービスへのデータ送信 | preview で宛先と送信内容を明示し、同意後だけ送信。Cookie/auth/backend/telemetry は使わず、利用条件と Privacy を公開前に再確認する。 |
-| optional host pattern と origin access | `https://chatgpt.com/*` は提出文言と実装の両方で path pattern の意味を説明し、実機で permission prompt を確認する。 |
+| optional host pattern と origin access | `https://chatgpt.com/*` は提出文言と実装の両方で path pattern の意味を説明する。permission warning は許可履歴のない実機環境で確認する。撤回後の再要求は Chrome 仕様により prompt なしで再付与される場合があるため、拡張機能独自の exact preview と明示同意を再要求する。 |
 
 ## 不足論点
 
-- PR #13 の修正前 build では foreground / background とも prompt 挿入後に自動送信されず、clipboard fallback も `write-failed` で失敗した。段落 plain-text 復元と単回 offscreen DOM copy を実装し、72 tests で検証済み。HEAD `5cf1416` の re-smoke では foreground の送信成功、background hidden の composer write gate failure、clipboard DOM copy の成功を確認した。background hidden の React / ProseMirror readiness は保証できないため、option 2 の foreground-only を Accepted とし、option 3 の background paste-only は将来 Issue 候補とする。安全に実行できない状態は option 5 の no-op + 明示的 feedback へ終端化する。logged-out、selector 変更、tab close、同意撤回、旧 `openInBackground` 保存値無視、追加 Security / Privacy review は未完了。
+- PR #13 の修正前 build では foreground / background とも prompt 挿入後に自動送信されず、clipboard fallback も `write-failed` で失敗した。段落 plain-text 復元と単回 offscreen DOM copy を実装し、現在は 84 tests で検証済み。HEAD `5cf1416` の re-smoke では foreground の送信成功、background hidden の composer write gate failure、clipboard DOM copy の成功を確認した。background hidden の React / ProseMirror readiness は保証できないため、option 2 の foreground-only を Accepted とし、option 3 の background paste-only は将来 Issue 候補とする。安全に実行できない状態は option 5 の no-op + 明示的 feedback へ終端化する。permission/consent の tab close と同意撤回を含む実機 smoke は完了し、logged-out、selector 変更、旧 `openInBackground` 保存値無視、追加 Security / Privacy review は未完了。
 - ChatGPT/OpenAI の利用条件と CWS 審査で Experimental DOM automation を扱う根拠。
 - 正式なデータ分類、ユーザーの個人情報・機密情報を選択しない注意、保持 / 削除の実機検証。
 - 公開者情報、Privacy Policy 公開 URL、正式名称、アクセシビリティ、スクリーンショット。
 
 ## 次の判断経路
 
-1. composer の段落 plain-text 復元と単回 offscreen DOM copy の最小修正、および 72 tests の結果を維持する。
+1. composer の段落 plain-text 復元と単回 offscreen DOM copy の最小修正、および 84 tests の結果を維持する。
 2. [v0.1 実装計画](v0.1-implementation-plan.md) の Step 8 として実施した re-smoke の結果を、foreground success / background hidden fail-closed / clipboard copied として記録する。
 3. Accepted とした ADR 0003 に従い、`openInBackground` 設定 UI / 保存を削除し、旧保存値を無視して target を foreground に固定する。permission、外部通信、データ境界は変更しない。
-4. Smoke 結果と permission、Privacy、Security、test fixture、acceptance criteria を同期し、Release Gate として foreground-only の前面表示、logged-out、DOM 変更、tab close、同意撤回、正式名称、CWS listing、Privacy URL、サポート窓口を確定する。
+4. Smoke 結果と permission、Privacy、Security、test fixture、acceptance criteria を同期し、Release Gate として foreground-only の前面表示、logged-out、DOM 変更、正式名称、CWS listing、Privacy URL、サポート窓口を確定する。
 5. background paste-only は将来 Issue 候補として別管理する。安全に実行できない状態は option 5 の no-op + 明示的 feedback へ終端化し、追加 retry / clipboard 操作を行わない。

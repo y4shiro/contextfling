@@ -295,6 +295,9 @@ function setupSettingsMode(elements: PageElements): void {
   elements.revokeConsentButton.addEventListener("click", () => {
     sendRuntimeMessage(elements, createRevokeConsentMessage(), (response) => {
       if (!response.ok) {
+        if (response.consentGranted === false) {
+          setConsentState(elements, null);
+        }
         setStatus(
           elements,
           response.message ?? "同意を撤回できませんでした。",

@@ -42,7 +42,7 @@ TTL は 10 分です。`expiresAt` 到達後は論理的に失効し、処理対
 
 旧バージョンの `openInBackground` が保存されていても読み取り・使用せず、foreground 動作へ移行します。新しい保存や migration write は行いません。
 
-同意を撤回すると、pending を削除し、optional permission を削除し、consent version を `null` に戻します。設定画面で選択文や URL を保存することはありません。
+同意を撤回すると、pending を削除し、optional permission を削除し、consent version を `null` に戻します。optional permission の削除後は host、`offscreen`、`clipboardWrite` を個別に再確認し、残存または確認失敗を成功扱いにしません。その場合も consent version と pending は安全側で削除し、設定画面で Chrome の拡張機能設定を確認するよう案内します。Chrome は以前に許可した permission を削除後に再要求すると、確認 prompt なしで再付与する場合がありますが、ContextFling は撤回後の新しい exact preview と明示同意を必須とし、以前の同意状態を再利用しません。設定画面で選択文や URL を保存することはありません。
 
 ## Clipboard fallback
 

@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import type { JSDOM as JSDOMType } from "jsdom";
 
 import {
+  bootstrapSettingsPage,
   isPreviewData,
   isRequestId,
   isRuntimeResponse,
@@ -12,9 +15,110 @@ import {
   parseRequestId,
   SETTINGS_MESSAGE_TYPES,
 } from "../src/settings/settings.js";
+import { CONSENT_VERSION } from "../src/state/types.js";
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const settingsDir = resolve(projectRoot, "src", "settings");
+const require = createRequire(import.meta.url);
+const { JSDOM } = require("jsdom") as typeof import("jsdom");
+
+type RuntimeMessageCall = {
+  readonly type: string;
+  readonly requestId?: string;
+};
+
+type InstalledSettingsPage = {
+  readonly dom: JSDOMType;
+  readonly cleanup: () => void;
+};
+
+type Deferred<T> = {
+  readonly promise: Promise<T>;
+  readonly reject: (reason?: unknown) => void;
+  readonly resolve: (value: T | PromiseLike<T>) => void;
+};
+
+function createDeferred<T>(): Deferred<T> {
+  let resolvePromise!: (value: T | PromiseLike<T>) => void;
+  let rejectPromise!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolve, reject) => {
+    resolvePromise = resolve;
+    rejectPromise = reject;
+  });
+  return {
+    promise,
+    reject: rejectPromise,
+    resolve: resolvePromise,
+  };
+}
+
+function installSettingsPage(
+  html: string,
+  requestId: string | null,
+  chromeStub: unknown,
+): InstalledSettingsPage {
+  const query = requestId === null ? "" : `?requestId=${requestId}`;
+  const dom = new JSDOM(html, {
+    url: `chrome-extension://test-extension/settings/settings.html${query}`,
+  });
+  const globalObject = globalThis as unknown as Record<string, unknown>;
+  const values: Record<string, unknown> = {
+    chrome: chromeStub,
+    document: dom.window.document,
+    window: dom.window,
+  };
+  const previous = new Map<
+    string,
+    { readonly exists: boolean; readonly value: unknown }
+  >();
+  for (const [key, value] of Object.entries(values)) {
+    previous.set(key, {
+      exists: Object.hasOwn(globalObject, key),
+      value: globalObject[key],
+    });
+    Object.defineProperty(globalObject, key, {
+      configurable: true,
+      value,
+      writable: true,
+    });
+  }
+
+  return {
+    dom,
+    cleanup: () => {
+      for (const [key, state] of previous) {
+        if (state.exists) {
+          Object.defineProperty(globalObject, key, {
+            configurable: true,
+            value: state.value,
+            writable: true,
+          });
+        } else {
+          delete globalObject[key];
+        }
+      }
+      dom.window.close();
+    },
+  };
+}
+
+async function flushAsyncWork(rounds = 3): Promise<void> {
+  for (let index = 0; index < rounds; index += 1) {
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+}
+
+function previewResponse() {
+  return {
+    ok: true,
+    preview: {
+      destination: "https://chatgpt.com/" as const,
+      prompt: "この文章を解説してください。\n\n非機密 fixture",
+      selectionText: "非機密 fixture",
+      sourceUrl: "https://x.com/example/status/123",
+    },
+  };
+}
 
 test("設定ページは外部資産とインライン実行を持たない", async () => {
   const [html, css, script] = await Promise.all([
@@ -173,4 +277,277 @@ test("approve のクリックは設定ページから権限を直接要求して
   assert.match(permissionSource, /offscreen/);
   assert.match(permissionSource, /clipboardWrite/);
   assert.match(permissionSource, /https:\/\/chatgpt\.com\/\*/);
+});
+
+test("approve click は request の settle 前に approve message を送らず、拒否結果でも settle 後に一度だけ送る", async () => {
+  const html = await readFile(resolve(settingsDir, "settings.html"), "utf8");
+  const permissionRequest = createDeferred<boolean>();
+  const calls: RuntimeMessageCall[] = [];
+  let requestedPermissions: unknown;
+  const chromeStub = {
+    permissions: {
+      request: (permissions: unknown) => {
+        requestedPermissions = permissions;
+        calls.push({ type: "permissions.request" });
+        return permissionRequest.promise;
+      },
+    },
+    runtime: {
+      sendMessage: (message: RuntimeMessageCall) => {
+        calls.push(message);
+        if (message.type === SETTINGS_MESSAGE_TYPES.getPreview) {
+          return Promise.resolve(previewResponse());
+        }
+        if (message.type === SETTINGS_MESSAGE_TYPES.approvePreview) {
+          return Promise.resolve({ ok: false, message: "permission denied" });
+        }
+        throw new Error(`unexpected message: ${message.type}`);
+      },
+    },
+  };
+  const installed = installSettingsPage(
+    html,
+    "request-approve-denied",
+    chromeStub,
+  );
+
+  try {
+    bootstrapSettingsPage();
+    await flushAsyncWork();
+
+    const approveButton = installed.dom.window.document.getElementById(
+      "approve-preview",
+    ) as HTMLButtonElement;
+    assert.equal(approveButton.disabled, false);
+
+    approveButton.click();
+    assert.deepEqual(
+      calls.map(({ type }) => type),
+      [SETTINGS_MESSAGE_TYPES.getPreview, "permissions.request"],
+    );
+    assert.deepEqual(requestedPermissions, {
+      origins: ["https://chatgpt.com/*"],
+      permissions: ["offscreen", "clipboardWrite"],
+    });
+
+    permissionRequest.resolve(false);
+    await flushAsyncWork();
+
+    assert.deepEqual(
+      calls.map(({ type }) => type),
+      [
+        SETTINGS_MESSAGE_TYPES.getPreview,
+        "permissions.request",
+        SETTINGS_MESSAGE_TYPES.approvePreview,
+      ],
+    );
+    assert.equal(
+      calls.filter(({ type }) => type === SETTINGS_MESSAGE_TYPES.approvePreview)
+        .length,
+      1,
+    );
+  } finally {
+    installed.cleanup();
+  }
+});
+
+test("permission request が reject しても approve message は promise settle 後だけ送る", async () => {
+  const html = await readFile(resolve(settingsDir, "settings.html"), "utf8");
+  const permissionRequest = createDeferred<boolean>();
+  const calls: RuntimeMessageCall[] = [];
+  const chromeStub = {
+    permissions: {
+      request: () => {
+        calls.push({ type: "permissions.request" });
+        return permissionRequest.promise;
+      },
+    },
+    runtime: {
+      sendMessage: (message: RuntimeMessageCall) => {
+        calls.push(message);
+        return message.type === SETTINGS_MESSAGE_TYPES.getPreview
+          ? Promise.resolve(previewResponse())
+          : Promise.resolve({ ok: false, message: "permission denied" });
+      },
+    },
+  };
+  const installed = installSettingsPage(
+    html,
+    "request-approve-rejected",
+    chromeStub,
+  );
+
+  try {
+    bootstrapSettingsPage();
+    await flushAsyncWork();
+    const approveButton = installed.dom.window.document.getElementById(
+      "approve-preview",
+    ) as HTMLButtonElement;
+    approveButton.click();
+    assert.equal(
+      calls.some(({ type }) => type === SETTINGS_MESSAGE_TYPES.approvePreview),
+      false,
+    );
+
+    permissionRequest.reject(new Error("request failed"));
+    await flushAsyncWork();
+    assert.equal(
+      calls.filter(({ type }) => type === SETTINGS_MESSAGE_TYPES.approvePreview)
+        .length,
+      1,
+    );
+  } finally {
+    installed.cleanup();
+  }
+});
+
+test("explicit reject は permission request を行わず reject message を一度だけ送る", async () => {
+  const html = await readFile(resolve(settingsDir, "settings.html"), "utf8");
+  const calls: RuntimeMessageCall[] = [];
+  const chromeStub = {
+    permissions: {
+      request: () => {
+        calls.push({ type: "permissions.request" });
+        return Promise.resolve(true);
+      },
+    },
+    runtime: {
+      sendMessage: (message: RuntimeMessageCall) => {
+        calls.push(message);
+        return message.type === SETTINGS_MESSAGE_TYPES.getPreview
+          ? Promise.resolve(previewResponse())
+          : Promise.resolve({ ok: true, message: "送信せずに破棄しました。" });
+      },
+    },
+  };
+  const installed = installSettingsPage(
+    html,
+    "request-explicit-reject",
+    chromeStub,
+  );
+
+  try {
+    bootstrapSettingsPage();
+    await flushAsyncWork();
+    const rejectButton = installed.dom.window.document.getElementById(
+      "reject-preview",
+    ) as HTMLButtonElement;
+    assert.equal(rejectButton.disabled, false);
+
+    rejectButton.click();
+    await flushAsyncWork();
+
+    assert.deepEqual(
+      calls.map(({ type }) => type),
+      [SETTINGS_MESSAGE_TYPES.getPreview, SETTINGS_MESSAGE_TYPES.rejectPreview],
+    );
+    assert.equal(
+      calls.some(({ type }) => type === "permissions.request"),
+      false,
+    );
+  } finally {
+    installed.cleanup();
+  }
+});
+
+test("settings mode の revoke は consent 状態を消し、次回確認が必要な表示へ戻す", async () => {
+  const html = await readFile(resolve(settingsDir, "settings.html"), "utf8");
+  const calls: RuntimeMessageCall[] = [];
+  const chromeStub = {
+    runtime: {
+      sendMessage: (message: RuntimeMessageCall) => {
+        calls.push(message);
+        if (message.type === SETTINGS_MESSAGE_TYPES.getSettings) {
+          return Promise.resolve({
+            ok: true,
+            settings: { consentVersion: CONSENT_VERSION },
+          });
+        }
+        return Promise.resolve({ ok: true, consentGranted: false });
+      },
+    },
+  };
+  const installed = installSettingsPage(html, null, chromeStub);
+
+  try {
+    bootstrapSettingsPage();
+    await flushAsyncWork();
+    const revokeButton = installed.dom.window.document.getElementById(
+      "revoke-consent",
+    ) as HTMLButtonElement;
+    const consentStatus =
+      installed.dom.window.document.getElementById("consent-status");
+    assert.equal(revokeButton.disabled, false);
+    assert.equal(consentStatus?.textContent, "同意済みです。");
+
+    revokeButton.click();
+    await flushAsyncWork();
+
+    assert.deepEqual(
+      calls.map(({ type }) => type),
+      [
+        SETTINGS_MESSAGE_TYPES.getSettings,
+        SETTINGS_MESSAGE_TYPES.revokeConsent,
+      ],
+    );
+    assert.equal(revokeButton.disabled, true);
+    assert.equal(consentStatus?.textContent, "まだ同意していません。");
+  } finally {
+    installed.cleanup();
+  }
+});
+
+test("revoke の確認失敗でも consentGranted=false なら UI は同意済み表示を残さない", async () => {
+  const html = await readFile(resolve(settingsDir, "settings.html"), "utf8");
+  const calls: RuntimeMessageCall[] = [];
+  const chromeStub = {
+    runtime: {
+      sendMessage: (message: RuntimeMessageCall) => {
+        calls.push(message);
+        if (message.type === SETTINGS_MESSAGE_TYPES.getSettings) {
+          return Promise.resolve({
+            ok: true,
+            settings: { consentVersion: CONSENT_VERSION },
+          });
+        }
+        return Promise.resolve({
+          ok: false,
+          consentGranted: false,
+          message: "権限の撤回を確認できませんでした。",
+        });
+      },
+    },
+  };
+  const installed = installSettingsPage(html, null, chromeStub);
+
+  try {
+    bootstrapSettingsPage();
+    await flushAsyncWork();
+    const revokeButton = installed.dom.window.document.getElementById(
+      "revoke-consent",
+    ) as HTMLButtonElement;
+    const consentStatus =
+      installed.dom.window.document.getElementById("consent-status");
+    assert.equal(revokeButton.disabled, false);
+
+    revokeButton.click();
+    await flushAsyncWork();
+
+    assert.equal(revokeButton.disabled, true);
+    assert.equal(consentStatus?.textContent, "まだ同意していません。");
+    assert.match(
+      installed.dom.window.document.getElementById("page-status")
+        ?.textContent ?? "",
+      /権限の撤回を確認できませんでした。/,
+    );
+    assert.deepEqual(
+      calls.map(({ type }) => type),
+      [
+        SETTINGS_MESSAGE_TYPES.getSettings,
+        SETTINGS_MESSAGE_TYPES.revokeConsent,
+      ],
+    );
+  } finally {
+    installed.cleanup();
+  }
 });
