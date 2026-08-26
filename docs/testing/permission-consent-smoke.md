@@ -1,6 +1,6 @@
 # Permission・consent 実機 smoke
 
-> Status: Automated verification complete / Chrome manual smoke pending
+> Status: Automated verification complete / Chrome manual smoke in progress
 >
 > Tracking: [GitHub Issue #4](https://github.com/y4shiro/contextfling/issues/4)
 
@@ -46,6 +46,18 @@ optional permission と明示同意の境界が、許可・拒否・撤回の各
 - `npm test` は 84 tests、lint、typecheck、build、secret scan、diff check はすべて成功した。
 
 P1–P8 の Chrome manual smoke は未完了であり、自動検証だけでは Issue #4 を完了扱いにしない。
+
+## Chrome manual smoke（2026-08-27）
+
+- Extension: 0.1.1
+- Chrome: version 未記録
+- fixture: 非機密データのみ（内容は記録しない）
+
+| ID | 結果 | 実機で確認した証跡 | 残存確認 |
+| --- | --- | --- | --- |
+| P5 | PASS | 拡張機能を再読み込み後、設定画面で同意を撤回し、「同意を撤回しました。次回に確認が必要です。」と表示された。現行 build は optional host、`offscreen`、`clipboardWrite` がすべて不在と再確認できた場合だけこの成功応答を返し、その前に consent version と全 pending を削除する。 | Chrome version は未記録。storage 値は DevTools で直接読み取っていない。 |
+
+P5 の成功表示と実装経路から、optional bundle の撤回確認、consent version と pending の cleanup を PASS とする。P6 で、新しい handoff が以前の同意を再利用せず exact preview に戻ることを続けて確認する。
 
 ## 記録フォーマット
 
