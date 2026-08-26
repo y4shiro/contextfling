@@ -15,9 +15,10 @@ Architecture Decision Record（ADR）は、変更コストが高く、複数の�
 ### Accepted（Experimental）
 
 - [0001: 実験的 ChatGPT Web handoff](0001-experimental-chatgpt-web-handoff.md) — v0.1 の限定 scope、初回 preview/明示同意、optional host/offscreen/clipboardWrite、毎回新規会話、retry 禁止、session cleanup を採用。実装成功・公式連携・Web Store 公開を意味しない。
+- [0003: background ChatGPT handoff の撤回](0003-background-chatgpt-handoff-withdrawal.md) — foreground の実機成功と background hidden の fail-closed を根拠に background 自動送信を撤回し、foreground-only と hidden 時の書き込み前 fail-closed を採択。background paste-only は将来 Issue 候補とする。
 
 ### Accepted（実装前）
 
 - [0002: X 単体ポストのページ右クリック実行](0002-single-post-context-menu.md) — 単体ポスト URL の通常ページ右クリック、status ID と一致する主投稿本文の抽出、既存 handoff の再利用を採用。新規 permission、X / Twitter の恒久 host permission、常駐 content script、action icon 即時実行、X 内常設 button は対象外。Accepted は仕様選定を示し、実装完了・自動検証・実機確認・公開承認を意味しない。
 
-v0.1.0 の本体機能は実装済みですが、ADR 0001 は Experimental で、Chrome 実機 smoke と Chrome Web Store 公開は未完了です。次の判断は、未検討の事項を勝手に `Accepted` にせず、`Proposed` または `Draft` として根拠・代替案・影響を記録します。
+v0.1.1 の本体機能は実装済みですが、ADR 0001 / 0003 は Experimental です。foreground 自動送信と clipboard DOM copy は実機成功、background hidden は送信前に fail-closed したため foreground-only を採択しました。foreground-only 化後の実機再確認は未完了で、Chrome Web Store には未公開です。次の判断は、未検討の事項を勝手に `Accepted` にせず、`Proposed` または `Draft` として根拠・代替案・影響を記録します。

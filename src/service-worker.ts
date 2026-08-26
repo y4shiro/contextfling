@@ -2,6 +2,7 @@ import { tryBuildPrompt } from "./core/prompt.js";
 import { normalizeSelection } from "./core/selection.js";
 import { normalizeXUrl, sanitizeXUrl } from "./core/url.js";
 import {
+  type ChatGptAdapterFailureReason,
   type ChatGptAdapterResult,
   type ChatGptAdapterStatus,
   createChatGptAdapterInput,
@@ -12,6 +13,7 @@ import {
   showChatGptBanner,
 } from "./destinations/chatgpt/banner.js";
 import {
+  type ClipboardFallbackResult,
   createClipboardFallbackCoordinator,
   type FallbackBannerPort,
   type OffscreenClipboardPort,
@@ -406,19 +408,110 @@ function isAdapterStatus(value: unknown): value is ChatGptAdapterStatus {
   );
 }
 
+function isAdapterFailureReason(
+  value: unknown,
+): value is ChatGptAdapterFailureReason {
+  return (
+    value === "none" ||
+    value === "invalid-input" ||
+    value === "document-not-visible" ||
+    value === "login-marker-visible" ||
+    value === "composer-timeout" ||
+    value === "composer-not-found" ||
+    value === "composer-ambiguous" ||
+    value === "composer-detached" ||
+    value === "composer-write-unconfirmed" ||
+    value === "container-not-found" ||
+    value === "send-not-found" ||
+    value === "send-ambiguous" ||
+    value === "send-disabled" ||
+    value === "send-detached" ||
+    value === "send-control-invalid" ||
+    value === "send-click-failed" ||
+    value === "send-result-unknown" ||
+    value === "post-submit-composer-detached"
+  );
+}
+
 function isAdapterResult(value: unknown): value is ChatGptAdapterResult {
   if (typeof value !== "object" || value === null) {
     return false;
   }
   const record = value as Record<string, unknown>;
+  const diagnostics = record.diagnostics;
+  if (typeof diagnostics !== "object" || diagnostics === null) {
+    return false;
+  }
+  const diagnosticRecord = diagnostics as Record<string, unknown>;
+  const attachment = diagnosticRecord.attachment;
+  if (typeof attachment !== "object" || attachment === null) {
+    return false;
+  }
+  const attachmentRecord = attachment as Record<string, unknown>;
+  const isAttachmentState = (item: unknown): boolean =>
+    item === "attached" || item === "detached" || item === "unknown";
   return (
     isAdapterStatus(record.status) &&
     (record.phase === "validate" ||
       record.phase === "composer" ||
       record.phase === "send") &&
     typeof record.attempted === "boolean" &&
-    typeof record.detail === "string"
+    typeof record.detail === "string" &&
+    (diagnosticRecord.visibilityState === "visible" ||
+      diagnosticRecord.visibilityState === "hidden" ||
+      diagnosticRecord.visibilityState === "prerender" ||
+      diagnosticRecord.visibilityState === "unloaded" ||
+      diagnosticRecord.visibilityState === "unknown") &&
+    isAdapterFailureReason(diagnosticRecord.failureReason) &&
+    Number.isSafeInteger(diagnosticRecord.composerCandidateCount) &&
+    (diagnosticRecord.composerCandidateCount as number) >= 0 &&
+    Number.isSafeInteger(diagnosticRecord.sendCandidateCount) &&
+    (diagnosticRecord.sendCandidateCount as number) >= 0 &&
+    isAttachmentState(attachmentRecord.composer) &&
+    isAttachmentState(attachmentRecord.container) &&
+    isAttachmentState(attachmentRecord.send)
   );
+}
+
+function reportAdapterDiagnostic(
+  result: ChatGptAdapterResult | null,
+  boundaryFailure?: "execute-script-failed" | "invalid-result",
+): void {
+  if (!result) {
+    console.info("ContextFling adapter diagnostic", {
+      event: "adapter",
+      boundaryFailure: boundaryFailure ?? "invalid-result",
+    });
+    return;
+  }
+  console.info("ContextFling adapter diagnostic", {
+    event: "adapter",
+    status: result.status,
+    phase: result.phase,
+    attempted: result.attempted,
+    failureReason: result.diagnostics.failureReason,
+    visibilityState: result.diagnostics.visibilityState,
+    composerCandidateCount: result.diagnostics.composerCandidateCount,
+    sendCandidateCount: result.diagnostics.sendCandidateCount,
+    composerAttachment: result.diagnostics.attachment.composer,
+    containerAttachment: result.diagnostics.attachment.container,
+    sendAttachment: result.diagnostics.attachment.send,
+  });
+}
+
+function reportClipboardDiagnostic(
+  cause: Exclude<ChatGptAdapterStatus, "sent" | "invalid-input">,
+  result: ClipboardFallbackResult,
+): void {
+  console.info("ContextFling clipboard diagnostic", {
+    event: "clipboard",
+    adapterCause: cause,
+    status: result.status,
+    failureCategory: result.failureCategory ?? "none",
+    cleanupFailureCategory: result.cleanupFailureCategory ?? "none",
+    lifecycleCategory: result.lifecycleCategory ?? "none",
+    bannerShown: result.bannerShown,
+  });
 }
 
 async function runFallback(
@@ -427,15 +520,32 @@ async function runFallback(
   cause: Exclude<ChatGptAdapterStatus, "sent" | "invalid-input">,
 ): Promise<void> {
   try {
-    await fallbackCoordinator.run({
+    const fallbackResult = await fallbackCoordinator.run({
       requestId: payload.id,
       tabId,
       prompt: payload.prompt,
       cause,
     });
+    reportClipboardDiagnostic(cause, fallbackResult);
   } finally {
     await removePending(payload.id);
   }
+}
+
+export type AdapterAttemptDisposition =
+  | "ignore"
+  | "cleanup-attempted"
+  | "attempt";
+
+export function classifyAdapterAttemptDisposition(
+  payload: PendingPayload,
+): AdapterAttemptDisposition {
+  if (payload.state !== "injecting" || payload.targetTabId === undefined) {
+    return "ignore";
+  }
+  return payload.adapterAttemptedAt === undefined
+    ? "attempt"
+    : "cleanup-attempted";
 }
 
 async function processTargetTabOnceUnsafe(
@@ -446,14 +556,21 @@ async function processTargetTabOnceUnsafe(
   if (!payload) {
     return;
   }
-  if (
-    payload.state !== "injecting" ||
-    payload.targetTabId === undefined ||
-    payload.adapterAttemptedAt !== undefined
-  ) {
+  const disposition = classifyAdapterAttemptDisposition(payload);
+  if (disposition === "ignore") {
+    return;
+  }
+  if (disposition === "cleanup-attempted") {
+    // A restarted Service Worker must not repeat an adapter or clipboard
+    // operation whose attempt marker was persisted. A later target update can
+    // safely perform terminal cleanup without retrying either operation.
+    await removePending(payload.id);
     return;
   }
   const tabId = payload.targetTabId;
+  if (tabId === undefined) {
+    return;
+  }
   if (Date.now() >= payload.expiresAt || !(await hasOptionalPermissions())) {
     await removePending(payload.id);
     return;
@@ -485,6 +602,8 @@ async function processTargetTabOnceUnsafe(
   }
 
   let adapterResult: ChatGptAdapterResult | null = null;
+  let adapterBoundaryFailure: "execute-script-failed" | "invalid-result" =
+    "invalid-result";
   try {
     const results = await chrome.scripting.executeScript({
       target: { tabId },
@@ -495,13 +614,24 @@ async function processTargetTabOnceUnsafe(
     const value = results[0]?.result;
     adapterResult = isAdapterResult(value) ? value : null;
   } catch {
+    adapterBoundaryFailure = "execute-script-failed";
     adapterResult = null;
   }
+  reportAdapterDiagnostic(adapterResult, adapterBoundaryFailure);
   if (adapterResult?.status === "sent") {
     await removePending(payload.id);
     return;
   }
   if (adapterResult?.status === "invalid-input") {
+    await createBannerPort()
+      .show(tabId, { kind: "dom-failure" })
+      .catch(() => undefined);
+    await removePending(payload.id);
+    return;
+  }
+  if (adapterResult?.diagnostics.failureReason === "document-not-visible") {
+    // Foreground-only is a safety boundary: do not copy to the clipboard or
+    // attempt any other handoff while the target document is hidden.
     await createBannerPort()
       .show(tabId, { kind: "dom-failure" })
       .catch(() => undefined);
@@ -555,7 +685,7 @@ async function launchQueuedOnce(requestIdValue: string): Promise<void> {
   try {
     target = await chrome.tabs.create({
       url: "about:blank",
-      active: !settings.openInBackground,
+      active: true,
     });
   } catch {
     await removePending(requestIdValue);
@@ -650,7 +780,6 @@ function settingsSnapshot(
 ) {
   return {
     consentVersion: settings.consentVersion,
-    openInBackground: settings.openInBackground,
   };
 }
 
@@ -665,23 +794,6 @@ async function handleSettingsMessage(
       ok: true,
       settings: settingsSnapshot(settings),
     });
-    return;
-  }
-  if (message.type === SETTINGS_MESSAGE_TYPES.updateSettings) {
-    try {
-      const settings = await getSettingsStore().setOpenInBackground(
-        message.openInBackground,
-      );
-      sendRuntimeResponse(sendResponse, {
-        ok: true,
-        settings: settingsSnapshot(settings),
-      });
-    } catch {
-      sendRuntimeResponse(sendResponse, {
-        ok: false,
-        message: "設定を保存できませんでした。",
-      });
-    }
     return;
   }
   if (message.type === SETTINGS_MESSAGE_TYPES.revokeConsent) {

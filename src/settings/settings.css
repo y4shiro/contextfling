@@ -111,30 +111,6 @@ h2 {
   padding: 20px;
 }
 
-fieldset.settings-group {
-  min-width: 0;
-}
-
-fieldset.settings-group legend {
-  padding: 0 6px;
-  color: #243b53;
-  font-weight: 700;
-}
-
-.checkbox-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  color: #243b53;
-  font-weight: 600;
-}
-
-.checkbox-row input {
-  width: 18px;
-  height: 18px;
-  accent-color: #2563eb;
-}
-
 .help-text {
   margin: 8px 0 0;
   color: #627d98;

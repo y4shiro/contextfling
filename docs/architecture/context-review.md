@@ -1,10 +1,10 @@
 # プロジェクトコンテキストレビュー
 
-> レビュー日: 2026-08-24
+> レビュー日: 2026-08-26
 >
 > Working Name（仮称）: ContextFling
 
-> 現状更新: v0.1.0 実装済み。自動検証済み、Chrome 実機 X→ChatGPT smoke 未完了、Chrome Web Store 未公開。
+> 現状更新: v0.1.1 実装済み。PR #13 の修正前 build では foreground / background とも自動送信と clipboard fallback が失敗した。HEAD `5cf1416` の re-smoke では foreground の送信成功、background hidden の fail-closed、clipboard DOM copy の成功を確認した。ADR 0003 で background 自動送信の撤回と foreground-only を Accepted。Chrome Web Store 未公開。
 
 この文書は、立ち上げ時の要求と Accepted Experimental design を分類し、実装前の境界を監査可能にするための記録です。詳細な責務、state machine、permission matrix、受入条件は [v0.1 設計書](v0.1-design.md)、判断の根拠と撤回条件は [ADR 0001](../adr/0001-experimental-chatgpt-web-handoff.md) を参照します。
 
@@ -12,15 +12,28 @@
 
 - 対象ブラウザは Google Chrome、拡張機能形式は Manifest V3 とする。
 - v0.1 の Source は X 上の選択文章、Destination は ChatGPT Web の新規会話に限定する。
-- 入口は右クリックの `ChatGPTで解説する` 1 項目。action click は設定画面を開き、foreground を既定値、background を設定値とする。
+- 入口は右クリックの `ChatGPTで解説する` 1 項目。action click は設定画面を開き、ChatGPT target は常に foreground とする。background 設定は設けない。
 - 選択文章は `selectionText`、動的 URL は sanitized X/Twitter status/current URL とし、prompt の動的値は URL と選択文章だけにする。
 - 固定 prompt は未信頼データの境界と、データ内の命令・コードを実行しない旨を含む。ファクトチェック要求と回答言語指定は含めない。
 - X URL は選択位置に近い `article` 内の HTTPS status link を優先し、query/hash を除去する。失敗時は許可 origin の sanitized current page URL を使い、それも不正なら送信しない。
 - 初回に送信内容、宛先、DOM automation と clipboard fallback のリスクを正確に preview し、明示同意後だけ有効化する。
 - required permission は `activeTab`、`contextMenus`、`scripting`、`storage`。optional permission/host は `https://chatgpt.com/*`、`offscreen`、`clipboardWrite` で、preview 後の設定ページ approve button の同期 click handler が `chrome.permissions.request()` を直接呼ぶ。promise 解決後に approve runtime message を送り、Service Worker が `chrome.permissions.contains()` で bundle 一式を最終確認する。storage 操作は Service Worker 経由とする。
-- pending payload は `storage.session`、settings/consent version だけは `storage.local` に置き、履歴を残さず終端で削除する。
+- pending payload は `storage.session`、consent version だけは `storage.local` に置き、履歴を残さず終端で削除する。旧 `openInBackground` 保存値は読み取り・使用しない。
 - ChatGPT Web の入力・自動送信は公式連携ではない Experimental adapter。selector 隔離、bounded observer/timeout、retry 禁止、offscreen clipboard fallback、ChatGPT tab banner を必須とする。
-- 現行 Manifest は v0.1.0 の permission matrix を実装済みで、context menu、設定 / preview、X URL 抽出、ChatGPT adapter、clipboard fallback、pending cleanup も実装済みである。Chrome 実機 smoke と CWS 公開は未完了である。
+- 現行 Manifest は v0.1.1 の permission matrix を実装済みで、context menu、設定 / preview、X URL 抽出、ChatGPT adapter、clipboard fallback、pending cleanup も実装済みである。PR #13 の修正前 foreground / background smoke はともに prompt の視覚的挿入後に自動送信されず、clipboard fallback も失敗した。HEAD `5cf1416` の re-smoke では foreground の送信成功、background hidden の composer write gate failure、background clipboard DOM copy の成功を確認した。これを根拠に background 自動送信を撤回し foreground-only とする option 2 を Accepted とした。安全に実行できない状態は option 5 の no-op + 明示的 feedback へ終端化する。
+
+### 修正前 build の実機 smoke（履歴）
+
+- foreground / background とも `status=selector-mismatch`、`phase=composer`、`attempted=false`、`failureReason=composer-write-unconfirmed`。固定 banner は表示され、send 操作・clipboard write の retry / 二重実行はなかった。
+- foreground の visible sample は composer 候補 1、composer / container attached、send 候補 1。background の hidden sample は composer attached、container unknown、send 候補 0。いずれも send control の操作前に終端化した。
+- 両経路の clipboard diagnostics は `status=clipboard-failed`、`failureCategory=write-failed`、`lifecycleCategory=none`、`cleanupFailureCategory=none`。offscreen lifecycle failure ではなく clipboard write operation rejection と切り分けられた。
+- ChatGPT composer は contenteditable の ProseMirror `div` で複数の直下 `p` 要素へ正規化される。`textContent` 完全一致 gate が段落改行を保持できず、複数行 prompt の書き込み確認を誤って拒否する原因を特定し、段落 plain-text 復元と単回 offscreen DOM copy を実装した。prompt・selection・clipboard 内容は記録しない。
+
+### HEAD `5cf1416` の修正後 re-smoke
+
+- foreground は `status=sent`、`phase=send`、`attempted=true`、`failureReason=none`、`visibilityState=visible`、composer / send 候補各 1、全 attachment `attached`。メッセージ送信成功、入力欄は空、banner なし。
+- background hidden sample は `status=selector-mismatch`、`phase=composer`、`attempted=false`、`failureReason=composer-write-unconfirmed`、composer 候補 1・composer `attached`、container / send は `unknown`・0。メッセージ未送信、入力欄に prompt が残り、banner が表示された。hidden document で React / ProseMirror state readiness を保証できないことが最有力の残存原因である。
+- background の clipboard fallback は `status=copied`、`failureCategory=none`、`cleanupFailureCategory=none`、`lifecycleCategory=none`、`bannerShown=true`。clipboard DOM copy の実機成功を確認した。Console に残った visible `sent` は直前の foreground ログであり、background 成功の証拠にはしない。retry / 二重送信は発生していない。
 
 ## 強い default
 
@@ -34,11 +47,11 @@
 ## 未確定・実装前に再確認する事項
 
 - 正式名称、商標、branding、CWS 掲載文言、Privacy Policy 公開 URL、正式な公開時期。
-- ChatGPT Web DOM adapter の実 selector、timeout、selection 上限、未ログイン判定、banner の実機動作。
-- Chrome 116 minimum の実機挙動、offscreen lifecycle、実際の permission warning。
+- foreground ChatGPT Web DOM adapter の実 selector、timeout、selection 上限、未ログイン判定、banner の実機動作。
+- Chrome 116 minimum の実機挙動、hidden document の React / ProseMirror state readiness、logged-out、DOM 変更、実際の permission warning。
 - X/Twitter の DOM 変更、status link が複数ある場合の距離判定、current URL fallback の実機挙動。
 - ChatGPT/OpenAI の利用条件、Web Store 審査、ユーザーが送信する個人情報・機密情報への注意表示。
-- v0.1 以外の Source/Destination、keyboard shortcut、複数 preset、paste-only を既定にするか。
+- v0.1 以外の Source/Destination、keyboard shortcut、複数 preset、background paste-only を導入するか。
 
 ## 再検証済みの公式仕様
 
@@ -64,14 +77,15 @@
 
 ## 不足論点
 
-- Chrome 実機での X / ChatGPT logged-in・logged-out、selector、送信結果不明、clipboard 成否、tab close、同意撤回の smoke。
+- PR #13 の修正前 build では foreground / background とも prompt 挿入後に自動送信されず、clipboard fallback も `write-failed` で失敗した。段落 plain-text 復元と単回 offscreen DOM copy を実装し、72 tests で検証済み。HEAD `5cf1416` の re-smoke では foreground の送信成功、background hidden の composer write gate failure、clipboard DOM copy の成功を確認した。background hidden の React / ProseMirror readiness は保証できないため、option 2 の foreground-only を Accepted とし、option 3 の background paste-only は将来 Issue 候補とする。安全に実行できない状態は option 5 の no-op + 明示的 feedback へ終端化する。logged-out、selector 変更、tab close、同意撤回、旧 `openInBackground` 保存値無視、追加 Security / Privacy review は未完了。
 - ChatGPT/OpenAI の利用条件と CWS 審査で Experimental DOM automation を扱う根拠。
 - 正式なデータ分類、ユーザーの個人情報・機密情報を選択しない注意、保持 / 削除の実機検証。
 - 公開者情報、Privacy Policy 公開 URL、正式名称、アクセシビリティ、スクリーンショット。
 
 ## 次の判断経路
 
-1. [v0.1 実装計画](v0.1-implementation-plan.md) の Step 8 として Chrome 実機 smoke を行う。
-2. Smoke 結果と permission、Privacy、Security、test fixture、acceptance criteria を同期する。
-3. Release Gate として正式名称、CWS listing、Privacy URL、サポート窓口を確定する。
-4. 撤回条件に該当する場合は DOM automation を paste-only/no-op へ戻し、ADR を更新する。
+1. composer の段落 plain-text 復元と単回 offscreen DOM copy の最小修正、および 72 tests の結果を維持する。
+2. [v0.1 実装計画](v0.1-implementation-plan.md) の Step 8 として実施した re-smoke の結果を、foreground success / background hidden fail-closed / clipboard copied として記録する。
+3. Accepted とした ADR 0003 に従い、`openInBackground` 設定 UI / 保存を削除し、旧保存値を無視して target を foreground に固定する。permission、外部通信、データ境界は変更しない。
+4. Smoke 結果と permission、Privacy、Security、test fixture、acceptance criteria を同期し、Release Gate として foreground-only の前面表示、logged-out、DOM 変更、tab close、同意撤回、正式名称、CWS listing、Privacy URL、サポート窓口を確定する。
+5. background paste-only は将来 Issue 候補として別管理する。安全に実行できない状態は option 5 の no-op + 明示的 feedback へ終端化し、追加 retry / clipboard 操作を行わない。

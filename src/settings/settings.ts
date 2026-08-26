@@ -2,7 +2,6 @@ import { OPTIONAL_PERMISSION_BUNDLE } from "./permissions.js";
 
 export const SETTINGS_MESSAGE_TYPES = {
   getSettings: "contextfling.settings.get",
-  updateSettings: "contextfling.settings.update",
   getPreview: "contextfling.settings.preview.get",
   approvePreview: "contextfling.settings.preview.approve",
   rejectPreview: "contextfling.settings.preview.reject",
@@ -21,16 +20,11 @@ export interface PreviewData {
 
 export interface SettingsSnapshot {
   readonly consentVersion: string | null;
-  readonly openInBackground: boolean;
 }
 
 export type SettingsMessage =
   | {
       readonly type: typeof SETTINGS_MESSAGE_TYPES.getSettings;
-    }
-  | {
-      readonly type: typeof SETTINGS_MESSAGE_TYPES.updateSettings;
-      readonly openInBackground: boolean;
     }
   | {
       readonly type: typeof SETTINGS_MESSAGE_TYPES.getPreview;
@@ -91,15 +85,6 @@ export function createSettingsMessage(): SettingsMessage {
   return { type: SETTINGS_MESSAGE_TYPES.getSettings };
 }
 
-export function createSettingsUpdateMessage(
-  openInBackground: boolean,
-): SettingsMessage {
-  return {
-    type: SETTINGS_MESSAGE_TYPES.updateSettings,
-    openInBackground,
-  };
-}
-
 export function createPreviewRequestMessage(
   requestId: string,
 ): SettingsMessage {
@@ -146,8 +131,7 @@ export function isSettingsSnapshot(value: unknown): value is SettingsSnapshot {
   }
 
   return (
-    (value.consentVersion === null || isNonEmptyString(value.consentVersion)) &&
-    typeof value.openInBackground === "boolean"
+    value.consentVersion === null || isNonEmptyString(value.consentVersion)
   );
 }
 
@@ -184,8 +168,6 @@ export function isSettingsMessage(value: unknown): value is SettingsMessage {
     case SETTINGS_MESSAGE_TYPES.getSettings:
     case SETTINGS_MESSAGE_TYPES.revokeConsent:
       return true;
-    case SETTINGS_MESSAGE_TYPES.updateSettings:
-      return typeof value.openInBackground === "boolean";
     case SETTINGS_MESSAGE_TYPES.getPreview:
     case SETTINGS_MESSAGE_TYPES.approvePreview:
     case SETTINGS_MESSAGE_TYPES.rejectPreview:
@@ -198,7 +180,6 @@ export function isSettingsMessage(value: unknown): value is SettingsMessage {
 type PageElements = {
   readonly approveButton: HTMLButtonElement;
   readonly consentStatus: HTMLElement;
-  readonly foregroundTab: HTMLInputElement;
   readonly pageStatus: HTMLElement;
   readonly previewDestination: HTMLElement;
   readonly previewPrompt: HTMLElement;
@@ -222,7 +203,6 @@ function getPageElements(): PageElements {
   return {
     approveButton: getElement<HTMLButtonElement>("approve-preview"),
     consentStatus: getElement("consent-status"),
-    foregroundTab: getElement<HTMLInputElement>("foreground-tab"),
     pageStatus: getElement("page-status"),
     previewDestination: getElement("preview-destination"),
     previewPrompt: getElement("preview-prompt"),
@@ -310,27 +290,7 @@ function sendRuntimeMessage(
 
 function setupSettingsMode(elements: PageElements): void {
   showSettings(elements);
-  elements.foregroundTab.checked = true;
   setStatus(elements, "設定を読み込んでいます。");
-
-  elements.foregroundTab.addEventListener("change", () => {
-    setStatus(elements, "設定を保存しています。");
-    sendRuntimeMessage(
-      elements,
-      createSettingsUpdateMessage(!elements.foregroundTab.checked),
-      (response) => {
-        if (!response.ok) {
-          setStatus(
-            elements,
-            response.message ?? "設定を保存できませんでした。",
-            true,
-          );
-          return;
-        }
-        setStatus(elements, "設定を保存しました。");
-      },
-    );
-  });
 
   elements.revokeConsentButton.addEventListener("click", () => {
     sendRuntimeMessage(elements, createRevokeConsentMessage(), (response) => {
@@ -356,7 +316,6 @@ function setupSettingsMode(elements: PageElements): void {
       );
       return;
     }
-    elements.foregroundTab.checked = !response.settings.openInBackground;
     setConsentState(elements, response.settings.consentVersion);
     setStatus(elements, "");
   });

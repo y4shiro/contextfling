@@ -26,8 +26,49 @@ export type ClipboardWriteResponse =
   | ClipboardWriteSuccess
   | ClipboardWriteError;
 
+const CLIPBOARD_WRITE_FAILURES: readonly ClipboardWriteFailure[] = [
+  "invalid-request",
+  "duplicate-request",
+  "clipboard-unavailable",
+  "write-failed",
+  "response-failed",
+];
+
+/**
+ * Validate a response crossing the runtime-message boundary.
+ *
+ * The service worker treats an absent or malformed response as a terminal
+ * response failure. Keeping this check in the offscreen module gives the
+ * fallback coordinator the same typed boundary without exposing any payload
+ * contents in diagnostics.
+ */
+export function isClipboardWriteResponse(
+  value: unknown,
+): value is ClipboardWriteResponse {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return (
+    record.ok === true ||
+    (record.ok === false &&
+      typeof record.reason === "string" &&
+      CLIPBOARD_WRITE_FAILURES.includes(record.reason as ClipboardWriteFailure))
+  );
+}
+
 export interface ClipboardWriter {
-  writeText(text: string): Promise<void>;
+  readonly body: {
+    appendChild(node: ClipboardTextArea): void;
+    removeChild(node: ClipboardTextArea): void;
+  } | null;
+  createElement(tagName: string): ClipboardTextArea;
+  execCommand(command: string): boolean;
+}
+
+export interface ClipboardTextArea {
+  value: string;
+  select(): void;
 }
 
 export interface RuntimeMessagePort {
@@ -66,19 +107,91 @@ function isClipboardWriteRequest(
   );
 }
 
+function isClipboardDom(value: unknown): value is ClipboardWriter {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  const body = record.body;
+  if (typeof record.createElement !== "function") {
+    return false;
+  }
+  if (typeof record.execCommand !== "function") {
+    return false;
+  }
+  if (typeof body !== "object" || body === null) {
+    return false;
+  }
+  const bodyRecord = body as Record<string, unknown>;
+  return (
+    typeof bodyRecord.appendChild === "function" &&
+    typeof bodyRecord.removeChild === "function"
+  );
+}
+
+function isClipboardTextArea(value: unknown): value is ClipboardTextArea {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.value === "string" && typeof record.select === "function"
+  );
+}
+
 export async function writeTextOnce(
   text: string,
   clipboard: ClipboardWriter | undefined,
 ): Promise<ClipboardWriteResponse> {
-  if (text.length === 0 || !clipboard) {
+  if (
+    typeof text !== "string" ||
+    text.length === 0 ||
+    !isClipboardDom(clipboard)
+  ) {
     return { ok: false, reason: "clipboard-unavailable" };
   }
-  try {
-    await clipboard.writeText(text);
-    return { ok: true };
-  } catch {
-    return { ok: false, reason: "write-failed" };
+  const body = clipboard.body;
+  if (!body) {
+    return { ok: false, reason: "clipboard-unavailable" };
   }
+
+  let textarea: ClipboardTextArea | undefined;
+  let appended = false;
+  let response: ClipboardWriteResponse = {
+    ok: false,
+    reason: "write-failed",
+  };
+  try {
+    textarea = clipboard.createElement("textarea");
+    if (!isClipboardTextArea(textarea)) {
+      return { ok: false, reason: "clipboard-unavailable" };
+    }
+    textarea.value = text;
+    body.appendChild(textarea);
+    appended = true;
+    textarea.select();
+    response = clipboard.execCommand("copy")
+      ? { ok: true }
+      : { ok: false, reason: "write-failed" };
+  } catch {
+    response = { ok: false, reason: "write-failed" };
+  } finally {
+    if (textarea) {
+      try {
+        textarea.value = "";
+      } catch {
+        response = { ok: false, reason: "write-failed" };
+      }
+    }
+    if (textarea && appended) {
+      try {
+        body.removeChild(textarea);
+      } catch {
+        response = { ok: false, reason: "write-failed" };
+      }
+    }
+  }
+  return response;
 }
 
 /**

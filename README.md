@@ -6,14 +6,14 @@ ContextFling は、X で選択した文章を新しい ChatGPT Web の会話へ�
 
 ## 現在の状態
 
-v0.1.1 の実装と自動検証（42 tests）は完了し、Chrome 実機で X→ChatGPT の自動送信成功を確認しています。ただし、ChatGPT Web の DOM に依存する Experimental 機能であり、Chrome Web Store にはまだ公開していません。v0.1.0 は `about:blank` 完了イベントの既知 race を含むため非推奨です。
+v0.1.1 の失敗経路を 72 tests で検証しています。PR #13 の 2026-08-26 修正前 build では foreground / background とも prompt 挿入後の自動送信と clipboard fallback が失敗しました。原因修正後の HEAD `5cf1416` を Chrome 実機で再確認した結果、foreground は送信成功、background は hidden document の React / ProseMirror state readiness を保証できず fail-closed しました。background の clipboard fallback 自体は `copied` まで成功していますが、自動送信は成立していません。修正前後とも自動 retry と二重送信は発生していません。この結果を受け、[ADR 0003](docs/adr/0003-background-chatgpt-handoff-withdrawal.md) で background 自動送信を撤回し、foreground-only（option 2）を Accepted としました。安全に実行できない状態は option 5（no-op + 明示的 feedback）で終端化します。option 3（background paste-only）は次点の将来 Issue 候補です。ChatGPT Web の DOM に依存する Experimental 機能であり、Chrome Web Store にはまだ公開していません。v0.1.0 は `about:blank` 完了イベントの既知 race を含むため非推奨です。
 
 現行の主な挙動は次のとおりです。
 
 - X / Twitter の選択範囲を右クリックし、`ChatGPTで解説する` を選びます。
 - 選択文は前後の空白と改行を正規化し、8,000 UTF-16 code units を上限にします。選択位置に近い status URL を優先し、取得できない場合は許可された X / Twitter ページ URL を query/hash なしで使います。
 - 初回は、実際に送る prompt、URL、選択文、宛先、DOM 自動操作と clipboard fallback のリスクをプレビューします。明示的に同意した場合だけ権限を要求します。
-- 同意後は毎回新しい `https://chatgpt.com/` タブを開きます。ChatGPT タブは前面表示が既定で、設定からバックグラウンド表示へ変更できます。
+- 同意後は毎回新しい `https://chatgpt.com/` タブを前面に開きます。バックグラウンド表示の設定はありません。旧バージョンの `openInBackground` 保存値が残っていても無視します。
 - ChatGPT Web への DOM 入力・送信は一度だけ試行します。失敗時は自動再送せず、clipboard fallback と ChatGPT タブ内の banner で案内します。
 - action は設定画面を開きます。送信履歴、選択文の履歴、URL 履歴は拡張機能内に保存しません。
 
@@ -68,7 +68,7 @@ GitHub Release の ZIP 配布は CWS 未公開の Experimental 配布です。CW
 4. X / Twitter 上の文章を選択し、右クリックの `ChatGPTで解説する` を実行します。
 5. 初回 preview で送信内容と宛先を確認し、同意するか拒否します。
 
-v0.1.1 では、実アカウントの機密情報を選択せずに X→ChatGPT の自動送信成功を実機確認済みです。追加の実機確認では、ChatGPT のログイン済み・未ログイン、前面・背景表示、DOM 変更、clipboard fallback、同意撤回を確認してください。
+v0.1.1 では、実アカウントの機密情報を選択せずに実機 smoke を行っています。修正前 build では foreground / background とも prompt の視覚的挿入後に自動送信されず、clipboard fallback も `write-failed` で失敗しました。段落 plain-text 復元と offscreen 単回 DOM copy を実装した HEAD `5cf1416` の re-smoke では、foreground が `status=sent` / `phase=send` / `attempted=true` / `failureReason=none`、`visibilityState=visible`、composer / send 候補各 1、全 attachment `attached` となり、メッセージ送信、入力欄の空、banner なしを確認しました。background は hidden sample が `status=selector-mismatch` / `phase=composer` / `attempted=false` / `failureReason=composer-write-unconfirmed`、composer 候補 1・composer `attached`、container / send は `unknown`・0 で、メッセージ未送信、入力欄への prompt 残留、banner 表示となりました。background の clipboard fallback は `status=copied`、`failureCategory=none`、`cleanupFailureCategory=none`、`lifecycleCategory=none`、`bannerShown=true` でした。Console に残った visible `sent` は直前の foreground ログであり、background 成功の証拠にはしません。これを根拠に background 自動送信の撤回と foreground-only を採択しました。安全に実行できない予期しない状態は option 5 の no-op + 明示的 feedback へ終端化し、option 3 の background paste-only は将来 Issue 候補として分離します。foreground-only 化後も、ChatGPT のログイン済み・未ログイン、DOM 変更、同意撤回、旧保存値無視、送信一回・cleanup を追加確認する実機 gate が残っています。
 
 ## 設計と制約
 
@@ -76,7 +76,7 @@ v0.1.1 では、実アカウントの機密情報を選択せずに X→ChatGPT 
 - `https://chatgpt.com/*`、`offscreen`、`clipboardWrite` は preview 後の同意ボタンから要求する optional permission です。
 - X / Twitter の恒久 host permission、`tabs`、`cookies`、`history`、`notifications`、`alarms`、`clipboardRead`、`<all_urls>`、backend、analytics、telemetry、OpenAI API、remote code は使用しません。
 - pending payload は `storage.session` に一時保存し、`expiresAt` により 10 分で論理失効させます。終端イベントでは削除しますが、`alarms` を使わないため、期限到達だけで物理削除されるとは限りません。物理削除は次の Service Worker 起床・関連イベント、または browser restart などで行われます。設定と consent version だけを `storage.local` に保存します。
-- ChatGPT Web の DOM 構造変更、未ログイン、送信結果不明、Chrome / Web Store の審査・利用条件が既知の制限です。実装は Experimental のままです。
+- ChatGPT Web の DOM 構造変更、React / ProseMirror state readiness、未ログイン、送信結果不明、Chrome / Web Store の審査・利用条件が既知の制限です。foreground-only でも非公開 DOM 依存は残り、安全に確認できない場合は fail-closed します。実装は Experimental のままです。
 
 詳細な責務、権限、状態遷移、受入状況は [v0.1 設計書](docs/architecture/v0.1-design.md)、実装履歴は [CHANGELOG.md](CHANGELOG.md)、公開前の確認事項は [CHROMEWEBSTORE.md](CHROMEWEBSTORE.md) に記録しています。継続ルールは [AGENTS.md](AGENTS.md) を参照してください。
 

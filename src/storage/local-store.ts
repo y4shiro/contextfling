@@ -15,7 +15,6 @@ function sanitizeSettings(value: unknown): Settings {
   }
   const raw = value as Record<string, unknown>;
   return {
-    openInBackground: raw.openInBackground === true,
     consentVersion: isConsentVersion(raw.consentVersion)
       ? CONSENT_VERSION
       : null,
@@ -37,18 +36,6 @@ export class LocalSettingsStore {
 
   public async set(settings: Settings): Promise<void> {
     await this.area.set({ [SETTINGS_STORAGE_KEY]: sanitizeSettings(settings) });
-  }
-
-  public async setOpenInBackground(
-    openInBackground: boolean,
-  ): Promise<Settings> {
-    const settings = await this.get();
-    const next: Settings = {
-      ...settings,
-      openInBackground: openInBackground === true,
-    };
-    await this.set(next);
-    return next;
   }
 
   public async setConsentVersion(

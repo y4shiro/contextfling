@@ -43,7 +43,6 @@ test("設定ページは設定モードとプレビューモードの要素を�
   for (const id of [
     "settings-view",
     "preview-view",
-    "foreground-tab",
     "consent-status",
     "revoke-consent",
     "preview-destination",
@@ -62,6 +61,7 @@ test("設定ページは設定モードとプレビューモードの要素を�
   assert.match(html, /自動再送せず/);
   assert.match(html, /クリップボード/);
   assert.match(html, /aria-live="polite"/);
+  assert.doesNotMatch(html, /foreground-tab|openInBackground/);
 });
 
 test("requestId は query または fragment から読み取れるが、規定外文字列は受け付けない", () => {
@@ -95,7 +95,7 @@ test("preview と settings の応答は宛先を固定し、動的文字列を�
     isRuntimeResponse({
       ok: true,
       preview,
-      settings: { consentVersion: null, openInBackground: false },
+      settings: { consentVersion: null },
     }),
     true,
   );
@@ -133,10 +133,10 @@ test("runtime message contract は preview の approve/reject を requestId 付�
   );
   assert.equal(
     isSettingsMessage({
-      type: SETTINGS_MESSAGE_TYPES.updateSettings,
+      type: "contextfling.settings.update",
       openInBackground: false,
     }),
-    true,
+    false,
   );
   assert.equal(
     isSettingsMessage({ type: "contextfling.settings.unknown" }),
