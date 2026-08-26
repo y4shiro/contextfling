@@ -10,6 +10,7 @@ import {
 } from "../src/handoff/fallback.js";
 import {
   type ClipboardWriteResponse,
+  type ClipboardWriter,
   installClipboardMessageHandler,
   type RuntimeMessagePort,
   writeTextOnce,
@@ -18,9 +19,10 @@ import {
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 test("offscreen は static HTML と runtime messaging だけで clipboard を扱う", async () => {
-  const [html, source] = await Promise.all([
+  const [html, source, entrySource] = await Promise.all([
     readFile(resolve(projectRoot, "src/offscreen/offscreen.html"), "utf8"),
     readFile(resolve(projectRoot, "src/offscreen/clipboard.ts"), "utf8"),
+    readFile(resolve(projectRoot, "src/offscreen/entry.ts"), "utf8"),
   ]);
   assert.match(html, /<script[^>]+src="offscreen\.js"/);
   assert.doesNotMatch(html, /<script[^>]*>\s*[^<\s]/i);
@@ -28,6 +30,8 @@ test("offscreen は static HTML と runtime messaging だけで clipboard を扱
   assert.match(source, /ClipboardWriter/);
   assert.match(source, /runtime\.onMessage/);
   assert.match(source, /writeTextOnce/);
+  assert.doesNotMatch(source, /navigator\.clipboard/);
+  assert.doesNotMatch(entrySource, /navigator\.clipboard/);
   assert.doesNotMatch(source, /\bfetch\s*\(/);
   assert.doesNotMatch(source, /chrome\.tabs|chrome\.scripting/);
 });
@@ -298,19 +302,89 @@ test("coordinator は concurrent fallback を直列化し、各 request の writ
   assert.equal(writeCalls, 2);
 });
 
-test("offscreen writer は clipboard unavailable と write rejection を公開し、handler は duplicate request を拒否する", async () => {
+test("offscreen writer は DOM copy の成功・false・throw と cleanup を一度だけ実行する", async () => {
   assert.deepEqual(await writeTextOnce("", undefined), {
     ok: false,
     reason: "clipboard-unavailable",
   });
   assert.deepEqual(
     await writeTextOnce("opaque test payload", {
-      writeText: async () => {
-        throw new Error("clipboard rejected");
-      },
+      body: null,
+      createElement: () => ({ value: "", select: () => undefined }),
+      execCommand: () => true,
     }),
-    { ok: false, reason: "write-failed" },
+    { ok: false, reason: "clipboard-unavailable" },
   );
+
+  type TextArea = { value: string; select(): void };
+  const textarea: TextArea = {
+    value: "",
+    select() {},
+  };
+  let appendCalls = 0;
+  let removeCalls = 0;
+  let execCalls = 0;
+  let copyResult = true;
+  let throwOnCopy = false;
+  const clipboard: ClipboardWriter = {
+    body: {
+      appendChild(node) {
+        assert.equal(node, textarea);
+        appendCalls += 1;
+      },
+      removeChild(node) {
+        assert.equal(node, textarea);
+        removeCalls += 1;
+      },
+    },
+    createElement(tagName) {
+      assert.equal(tagName, "textarea");
+      return textarea;
+    },
+    execCommand(command) {
+      assert.equal(command, "copy");
+      execCalls += 1;
+      if (throwOnCopy) {
+        throw new Error("copy rejected");
+      }
+      return copyResult;
+    },
+  };
+
+  assert.deepEqual(await writeTextOnce("opaque test payload", clipboard), {
+    ok: true,
+  });
+  assert.equal(execCalls, 1);
+  assert.equal(appendCalls, 1);
+  assert.equal(removeCalls, 1);
+  assert.equal(textarea.value, "");
+
+  copyResult = false;
+  assert.deepEqual(await writeTextOnce("opaque test payload", clipboard), {
+    ok: false,
+    reason: "write-failed",
+  });
+  assert.equal(execCalls, 2);
+  assert.equal(appendCalls, 2);
+  assert.equal(removeCalls, 2);
+  assert.equal(textarea.value, "");
+
+  throwOnCopy = true;
+  assert.deepEqual(await writeTextOnce("opaque test payload", clipboard), {
+    ok: false,
+    reason: "write-failed",
+  });
+  assert.equal(execCalls, 3);
+  assert.equal(appendCalls, 3);
+  assert.equal(removeCalls, 3);
+  assert.equal(textarea.value, "");
+});
+
+test("offscreen writer は clipboard unavailable と handler の duplicate request を返す", async () => {
+  assert.deepEqual(await writeTextOnce("opaque test payload", undefined), {
+    ok: false,
+    reason: "clipboard-unavailable",
+  });
 
   type Listener = Parameters<RuntimeMessagePort["onMessage"]["addListener"]>[0];
   let listener: Listener | undefined;
@@ -329,8 +403,14 @@ test("offscreen writer は clipboard unavailable と write rejection を公開�
       },
     },
     {
-      writeText: async () => {
+      body: {
+        appendChild: () => undefined,
+        removeChild: () => undefined,
+      },
+      createElement: () => ({ value: "", select: () => undefined }),
+      execCommand: () => {
         writes += 1;
+        return true;
       },
     },
   );
