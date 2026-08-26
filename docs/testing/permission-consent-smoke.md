@@ -55,10 +55,11 @@ P1–P8 の Chrome manual smoke は未完了であり、自動検証だけでは
 
 | ID | 結果 | 実機で確認した証跡 | 残存確認 |
 | --- | --- | --- | --- |
+| P1 | PASS | exact preview で「拒否して破棄する」を選び、「送信せずに破棄しました。」と表示された。現行 build の reject 経路は permission request を呼ばず、対応する pending を削除してから成功応答を返す。 | Chrome version は未記録。target tab 非生成は実装経路と自動テストで補完した。 |
 | P5 | PASS | 拡張機能を再読み込み後、設定画面で同意を撤回し、「同意を撤回しました。次回に確認が必要です。」と表示された。現行 build は optional host、`offscreen`、`clipboardWrite` がすべて不在と再確認できた場合だけこの成功応答を返し、その前に consent version と全 pending を削除する。 | Chrome version は未記録。storage 値は DevTools で直接読み取っていない。 |
-| P6 | PASS | P5 後の新しい handoff で、実際の送信内容と宛先を示す exact preview、および「同意して送信する」「拒否して破棄する」が再表示された。 | P1 または P4 の終端操作は別途確認する。 |
+| P6 | PASS | P5 後の新しい handoff で、実際の送信内容と宛先を示す exact preview、および「同意して送信する」「拒否して破棄する」が再表示された。 | permission 許可から handoff までの P4 は別途確認する。 |
 
-P5 の成功表示と実装経路から、optional bundle の撤回確認、consent version と pending の cleanup を PASS とする。P6 では、新しい handoff が以前の同意を再利用せず exact preview と明示同意へ戻ることを確認した。
+P1 の成功表示と実装経路から、permission request と ChatGPT target を作らず pending を削除する明示拒否を PASS とする。P5 の成功表示と実装経路から、optional bundle の撤回確認、consent version と pending の cleanup を PASS とする。P6 では、新しい handoff が以前の同意を再利用せず exact preview と明示同意へ戻ることを確認した。
 
 ## 記録フォーマット
 
