@@ -3,8 +3,8 @@
 - Status: Accepted
 - Scope: v0.1.x hardening
 - Date: 2026-08-24
-- Last updated: 2026-08-26
-- Related: GitHub Issue #3 / Issue #6
+- Last updated: 2026-08-27
+- Related: GitHub Issue #3 / Issue #4 / Issue #6
 
 ## Context
 
@@ -60,7 +60,9 @@ background 設定の削除、旧保存値の無視、foreground-only の tab 作
 - adapter 実行時に document が hidden なら `document-not-visible` / `attempted=false` とし、composer 書き込み、send click、clipboard fallback を行わず固定 feedback と cleanup へ終端すること。
 - contenteditable ProseMirror の段落を plain text に復元する書き込み確認と、完全一致できない場合の fail-closed。clipboard unavailable、write rejection、response failure、offscreen creation race の typed category。
 - duplicate `tabs.onUpdated`、target close、Service Worker restart 相当で send / clipboard write が二回実行されず、pending が終端 cleanup されること。
-- 非機密 fixture を使った Chrome re-smoke は実施済みで、foreground の送信成功、background hidden の fail-closed、clipboard DOM copy の成功を確認した。foreground-only 化後の実機再確認（target が前面で開くこと、旧 `openInBackground` 値を無視すること、送信一回・cleanup・failure feedback）と追加シナリオ、Security / Privacy review が残るため Release Gate は閉じない。
+- 2026-08-27 の Issue #6 実機 smoke は、Chrome `151.0.7922.140` (arm64) / Extension `0.1.1` の再読み込み後に完了した。[Chrome 116+ smoke 詳細](../testing/chrome-116-smoke.md) に手順と非機密の証跡を記録する。X / Twitter の selection menu・近傍 status URL・article 外の page URL fallback、foreground target、旧 `openInBackground: true` 保存値無視、logged-in の単回送信・composer cleanup・banner なし・retry / 二重送信 / 追加 target なし、target close 後の再生成・retry なしを確認した。別 profile の logged-out 経路は送信せず clipboard コピー成功 banner へ終端し、5秒後の再表示・追加動作なしを確認した。
+- Issue #3 / #4 の foreground 成功、visibility race、permission consent cleanup の完了証跡とも整合する。DOM 変更、timeout、`send-unknown`、clipboard failure / offscreen edge は通常の実 UI で決定論的に再現できないため、本番用 test hook、非公開 DOM 改変、retry の追加は行わず、84 tests で typed failure / cleanup / no-retry を補完した。
+- foreground-only 化後の実機再確認は完了したが、Security / Privacy review と正式名称・素材・Privacy URL 等の CWS Release Gate は未完了のため、Release Gate は閉じない。
 
 ## Consequences
 

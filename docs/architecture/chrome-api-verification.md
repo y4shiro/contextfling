@@ -4,7 +4,7 @@
 >
 > Working Name（仮称）: ContextFling
 >
-> 現状: `src/manifest.json` は v0.1.0 の permission matrix を実装済み。Chrome 実機 X→ChatGPT smoke と CWS 公開は未完了。
+> 現状: `src/manifest.json` は v0.1.1 の permission matrix を実装済み。2026-08-27 の Chrome 151 で permission / consent と Issue #6 の X→ChatGPT smoke を完了。CWS 公開は未完了。
 
 ## 参照した Chrome 公式ページ
 

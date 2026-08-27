@@ -2,7 +2,7 @@
 
 > Working Name（仮称）: ContextFling
 
-ContextFling v0.1.0 は実装済みの Experimental Chrome 拡張機能 OSS です。Chrome Web Store は未公開で、Chrome 実機 X→ChatGPT smoke も未完了です。実装済みの Source、Destination、権限、handoff 方式を変更する場合は、設計文書・ADR・受入条件を確認してください。
+ContextFling v0.1.1 は実装済みの Experimental Chrome 拡張機能 OSS です。2026-08-27 の Chrome 151 で X→ChatGPT の foreground-only smoke を完了していますが、Chrome Web Store は未公開です。実装済みの Source、Destination、権限、handoff 方式を変更する場合は、設計文書・ADR・受入条件を確認してください。
 
 ## 配布と公開
 

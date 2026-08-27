@@ -1,10 +1,10 @@
 # プロジェクトコンテキストレビュー
 
-> レビュー日: 2026-08-26
+> レビュー日: 2026-08-27
 >
 > Working Name（仮称）: ContextFling
 
-> 現状更新: v0.1.1 実装済み。PR #13 の修正前 build では foreground / background とも自動送信と clipboard fallback が失敗した。HEAD `5cf1416` の re-smoke では foreground の送信成功、background hidden の fail-closed、clipboard DOM copy の成功を確認した。ADR 0003 で background 自動送信の撤回と foreground-only を Accepted。Chrome Web Store 未公開。
+> 現状更新: v0.1.1 実装済み。ADR 0003 で background 自動送信を撤回し foreground-only を Accepted。2026-08-27 の Chrome `151.0.7922.140` (arm64) / Extension `0.1.1` で Issue #6 の実機 smoke を完了し、selection/status URL、page URL fallback、foreground target、旧保存値無視、logged-out clipboard fallback、target close 後の no-retry を確認した。安全に手動再現できない DOM 変更・timeout・`send-unknown`・clipboard failure / offscreen edge は 84 tests で補完した。Chrome Web Store 未公開。
 
 この文書は、立ち上げ時の要求と Accepted Experimental design を分類し、実装前の境界を監査可能にするための記録です。詳細な責務、state machine、permission matrix、受入条件は [v0.1 設計書](v0.1-design.md)、判断の根拠と撤回条件は [ADR 0001](../adr/0001-experimental-chatgpt-web-handoff.md) を参照します。
 
@@ -44,12 +44,12 @@
 - 外部 backend、X API、OpenAI API、API key、Cookie/auth、analytics、telemetry、広告、remote config、remote code は使用しない。
 - X/Twitter の恒久 host permission、`tabs`、`notifications`、`alarms`、`clipboardRead`、`<all_urls>` は使用しない。
 
-## 未確定・実装前に再確認する事項
+## 未確定・公開前に再確認する事項
 
 - 正式名称、商標、branding、CWS 掲載文言、Privacy Policy 公開 URL、正式な公開時期。
-- foreground ChatGPT Web DOM adapter の実 selector、timeout、selection 上限、未ログイン判定、banner の実機動作。
-- Chrome 116 minimum の実機挙動、hidden document の React / ProseMirror state readiness、logged-out、DOM 変更、実際の permission warning。
-- X/Twitter の DOM 変更、status link が複数ある場合の距離判定、current URL fallback の実機挙動。
+- foreground ChatGPT Web DOM adapter の非公開 selector、React / ProseMirror state readiness、将来の DOM 変更と timeout の継続リスク。
+- Chrome 151 の代表 smoke を Chrome 116 以上の全バージョンへ一般化しないこと。permission warning と permission / consent 境界は Chrome 151 で確認済み。
+- X/Twitter の将来の DOM 変更。status link と current page URL fallback は fixture と Chrome 151 の実機で確認済み。
 - ChatGPT/OpenAI の利用条件、Web Store 審査、ユーザーが送信する個人情報・機密情報への注意表示。
 - v0.1 以外の Source/Destination、keyboard shortcut、複数 preset、background paste-only を導入するか。
 
@@ -77,7 +77,7 @@
 
 ## 不足論点
 
-- PR #13 の修正前 build では foreground / background とも prompt 挿入後に自動送信されず、clipboard fallback も `write-failed` で失敗した。段落 plain-text 復元と単回 offscreen DOM copy を実装し、現在は 84 tests で検証済み。HEAD `5cf1416` の re-smoke では foreground の送信成功、background hidden の composer write gate failure、clipboard DOM copy の成功を確認した。background hidden の React / ProseMirror readiness は保証できないため、option 2 の foreground-only を Accepted とし、option 3 の background paste-only は将来 Issue 候補とする。安全に実行できない状態は option 5 の no-op + 明示的 feedback へ終端化する。permission/consent の tab close と同意撤回を含む実機 smoke は完了し、logged-out、selector 変更、旧 `openInBackground` 保存値無視、追加 Security / Privacy review は未完了。
+- PR #13 の修正前 build で判明した composer write gate failure と clipboard write rejection は、段落 plain-text 復元と単回 offscreen DOM copy で修正し、foreground-only を Accepted とした。Issue #3 / #4 と [Issue #6 の Chrome smoke](../testing/chrome-116-smoke.md) で foreground、visibility race、permission / consent、logged-out、旧 `openInBackground` 保存値無視、target close を確認した。DOM 変更・timeout・`send-unknown`・clipboard failure / offscreen edge は安全な手動再現を避け、84 tests で補完した。追加 Security / Privacy review は未完了。
 - ChatGPT/OpenAI の利用条件と CWS 審査で Experimental DOM automation を扱う根拠。
 - 正式なデータ分類、ユーザーの個人情報・機密情報を選択しない注意、保持 / 削除の実機検証。
 - 公開者情報、Privacy Policy 公開 URL、正式名称、アクセシビリティ、スクリーンショット。
@@ -87,5 +87,5 @@
 1. composer の段落 plain-text 復元と単回 offscreen DOM copy の最小修正、および 84 tests の結果を維持する。
 2. [v0.1 実装計画](v0.1-implementation-plan.md) の Step 8 として実施した re-smoke の結果を、foreground success / background hidden fail-closed / clipboard copied として記録する。
 3. Accepted とした ADR 0003 に従い、`openInBackground` 設定 UI / 保存を削除し、旧保存値を無視して target を foreground に固定する。permission、外部通信、データ境界は変更しない。
-4. Smoke 結果と permission、Privacy、Security、test fixture、acceptance criteria を同期し、Release Gate として foreground-only の前面表示、logged-out、DOM 変更、正式名称、CWS listing、Privacy URL、サポート窓口を確定する。
+4. Issue #6 の smoke 結果と permission、Privacy、Security、test fixture、acceptance criteria の整合を維持し、残る Release Gate として Security / Privacy review、正式名称、CWS listing、Privacy URL、サポート窓口を確定する。
 5. background paste-only は将来 Issue 候補として別管理する。安全に実行できない状態は option 5 の no-op + 明示的 feedback へ終端化し、追加 retry / clipboard 操作を行わない。
