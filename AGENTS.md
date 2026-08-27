@@ -68,6 +68,9 @@
 - 通常タスクでは Issue に紐づく working branch を作成し、可能なら branch 名に Issue 番号を含める。最初の意味のある commit 後、substantial implementation を続ける前を目安に Draft PR を作成する。
 - PR を実装・レビュー・検証の共有作業場所とし、今回修正する問題は PR review / comment に残す。scope 外の改善は新規 Issue へ分離する。
 - Review finding は妥当性を Requirements と実装に照らして検証してから修正し、Ready / Merge 前に必要な validation を行う。
+- 既定の Review Agent は親 Codex Sol とし、Issue、PR diff、関連コード、validation 結果を自ら確認して final review と修正後の re-review を行う。Implementation Agent の説明だけを根拠にしない。
+- ChatGPT Web 上の Sol / computer use は既定の review 経路にせず、Human maintainer の明示依頼がある場合だけ使用する。同一 diff に対する Codex Sol と ChatGPT Web Sol の二重 review は既定にしない。
+- Human maintainer は最終 Merge と Release Gate を保持する。明示された security 専門 workflow（security scan など）は、この既定 review 経路によって妨げない。
 - Agent はユーザーの明示指示なしに Merge しない。
 - 詳細な手順、Issue / branch / PR の関連付け、引き継ぎ方法は [docs/development/agent-workflow.md](docs/development/agent-workflow.md) を参照する。
 

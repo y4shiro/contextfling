@@ -9,11 +9,11 @@
 このワークフローは次を可能にします。
 
 - Issue、working branch、Pull Request の対応関係を追跡可能にする
-- Agent 間の責務を分離し、Implementation Agent と Review Agent を独立させる
+- Agent 間の責務を分離し、Implementation Agent と親 Codex Sol の Review Agent を独立させる
 - Issue の要件と実装・レビューのログを混在させない
 - Agent セッションが終了しても、Issue と PR から状態、blocker、未完了事項を復元できるようにする
 - 別の Agent が Issue と PR だけを手掛かりに作業を再開できるようにする
-- Review Agent がレビュー対象の implementation diff を明確に特定できるようにする
+- 親 Codex Sol がレビュー対象の implementation diff を明確に特定できるようにする
 
 基本ライフサイクルは次のとおりです。
 
@@ -105,17 +105,17 @@ Draft PR 作成後は、原則として同じ branch / PR 上で実装、検証�
 
 Implementation Agent は Issue の範囲内で実装し、変更に応じた lint、typecheck、test、build、secret check、必要な実機確認を行います。結果、未実行の検証と理由、残存リスクを PR へ記録します。
 
-### 6. 独立 Review
+### 6. 独立 Review（既定: 親 Codex Sol）
 
-Review Agent は Issue、Acceptance Criteria、PR diff、関連コードと文書を独立して確認します。Implementation Agent の説明だけを根拠にせず、今回の PR で修正すべき問題と scope 外の follow-up を分けて PR に残します。
+親 Codex Sol は Issue、Acceptance Criteria、PR diff、関連コード、validation 結果と文書を直接・独立して確認し、final review を行います。Implementation Agent の説明だけを根拠にせず、今回の PR で修正すべき問題と scope 外の follow-up を分けて PR に残します。ChatGPT Web 上の Sol / computer use は既定経路にせず、Human maintainer の明示依頼がある場合だけ使用します。同一 diff に対する Codex Sol と ChatGPT Web Sol の二重 review は既定にしません。明示された security 専門 workflow（security scan など）は別途実行でき、この既定経路を妨げません。
 
 ### 7. Review fixes と再レビュー
 
-Implementation Agent は Review finding を受け取ったら、Issue、Requirements、Acceptance Criteria、実装と関連コードを確認して妥当性を判断します。妥当な指摘だけを同じ PR で修正し、修正後に再検証します。Review Agent は修正後の diff を再レビューします。
+Implementation Agent は Review finding を受け取ったら、Issue、Requirements、Acceptance Criteria、実装と関連コードを確認して妥当性を判断します。妥当な指摘だけを同じ PR で修正し、修正後に再検証します。親 Codex Sol は修正後の diff、関連コード、validation を再レビュー（re-review）します。
 
 ### 8. Ready for review、Human merge、Issue close
 
-必要な validation と review findings の対応が終わったら、PR を Ready for review にします。Review Agent の `mergeable` 評価は参考情報であり、最終的な scope、Merge、Release Gate の判断は Human maintainer が行います。closing keyword がある PR がデフォルト branch へ Merge された後に GitHub が Issue を close します。
+必要な validation と review findings の対応が終わったら、PR を Ready for review にします。親 Codex Sol の `mergeable` 評価は参考情報であり、最終的な scope、Merge、Release Gate の判断は Human maintainer が行います。closing keyword がある PR がデフォルト branch へ Merge された後に GitHub が Issue を close します。
 
 ## Issue / branch / PR の関連付け
 
@@ -194,7 +194,7 @@ Draft 段階では、例えば次の状態を PR 本文で更新します。
 - [x] Unit tests
 - [ ] Browser verification
 - [ ] Review findings addressed
-- [ ] Final review
+- [ ] Parent Codex Sol direct review
 ```
 
 Issue を実装作業ログとして更新し続けず、Implementation、Validation、CI、Review、Review findings、Fixes、Re-review、Remaining risks、Follow-ups は PR に集約します。
@@ -210,9 +210,9 @@ Issue を実装作業ログとして更新し続けず、Implementation、Valida
 - Review Agent の指摘を Requirements と実装に照らして検証する
 - 妥当な指摘を修正し、修正後に再検証する
 
-### Review Agent
+### Review Agent（既定: 親 Codex Sol）
 
-- Issue、Acceptance Criteria、PR diff、関連コードと文書を確認する
+- Issue、Acceptance Criteria、PR diff、関連コード、validation 結果と文書を直接確認する
 - Implementation Agent とは独立した観点で correctness、regression、maintainability、error handling、test coverage を確認する
 - architecture consistency、security、privacy、Chrome extension permissions、Manifest V3、untrusted input 境界、DOM / selector の脆弱性、文書整合性を確認する
 - 今回修正すべき問題は PR に残し、scope 外の問題は Follow-up Issue に分離する
@@ -236,8 +236,11 @@ Issue を実装作業ログとして更新し続けず、Implementation、Valida
 Implementation Agent:
 - OpenCode
 
-Review Agent:
-- ChatGPT Web / GPT-5.6 Sol
+Review Agent（既定）:
+- 親 Codex Sol（Issue / PR diff / 関連コード / validation の直接 review と re-review）
+
+ChatGPT Web Sol / computer use:
+- 既定経路では使用しない。Human maintainer の明示依頼時のみ使用する
 
 Final merge authority:
 - Human maintainer
@@ -315,7 +318,7 @@ Ready for review
 このワークフローは既存の製品・セキュリティ・公開ルールを緩和しません。
 
 - Agent はユーザーの明示指示なしに Merge しない
-- Review Agent は自動 Merge しない。CI 成功だけを理由に Merge しない
+- 親 Codex Sol は自動 Merge しない。CI 成功だけを理由に Merge しない
 - Chrome Web Store 公開は Merge とは別の Release Gate とする
 - CWS の submit / publish は CI、Actions、Agent、スクリプトから自動化せず、ユーザーが手動操作する
 
