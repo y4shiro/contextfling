@@ -48,7 +48,7 @@ foreground の composer 書き込み・送信成功、visibility race または 
 
 | ID | 経路 | 実機で確認した操作・状態 | 結果 | 残存確認 |
 | --- | --- | --- | --- | --- |
-| F1 | X selection menu + 近傍 status URL | 公開 X / Twitter の投稿内テキストを選択し、context menu の ContextFling 項目から handoff を開始した。近傍の status link が正規化され、新規 ChatGPT target が前面に開いた。 | PASS | user message は 1 件、composer は空、banner なし。5 秒後も retry・二重送信・追加 target なし。 |
+| F1 | X selection menu + 近傍 status URL | 公開 X / Twitter の投稿内テキストを選択し、context menu の `ChatGPTで解説する` から handoff を開始した。近傍の status link が正規化され、新規 ChatGPT target が前面に開いた。 | PASS | user message は 1 件、composer は空、banner なし。5 秒後も retry・二重送信・追加 target なし。 |
 | F2 | page URL fallback | article 外の固定見出しを選択して handoff を開始し、近傍 status link がない場合に page URL fallback が使われることを確認した。 | PASS | F1 と同じく user message は 1 件、composer cleanup 済み、banner なし。5 秒後も retry・二重送信・追加 target なし。 |
 | F3 | 旧 `openInBackground` 保存値 | `chrome.storage.local` に旧 `openInBackground: true` と consent version を一時保存した状態で handoff を開始した。 | PASS | target は background ではなく foreground。user message は 1 件、composer cleanup 済み、retry・二重送信なし。確認後、設定値は consent version のみに復元した。 |
 | F4 | target tab close | foreground target を開いた直後にその tab を閉じ、ContextFling を再実行せずに待機した。 | PASS | 5 秒後も target の再生成・retry なし。閉じるまでの送信成否は確認せず、結果不明時の再実行禁止を守った。pending の物理 cleanup は既存の target close 自動テストで補完した。 |

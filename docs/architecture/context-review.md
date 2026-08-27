@@ -20,7 +20,7 @@
 - required permission は `activeTab`、`contextMenus`、`scripting`、`storage`。optional permission/host は `https://chatgpt.com/*`、`offscreen`、`clipboardWrite` で、preview 後の設定ページ approve button の同期 click handler が `chrome.permissions.request()` を直接呼ぶ。promise 解決後に approve runtime message を送り、Service Worker が `chrome.permissions.contains()` で bundle 一式を最終確認する。storage 操作は Service Worker 経由とする。
 - pending payload は `storage.session`、consent version だけは `storage.local` に置き、履歴を残さず終端で削除する。旧 `openInBackground` 保存値は読み取り・使用しない。
 - ChatGPT Web の入力・自動送信は公式連携ではない Experimental adapter。selector 隔離、bounded observer/timeout、retry 禁止、offscreen clipboard fallback、ChatGPT tab banner を必須とする。
-- 現行 Manifest は v0.1.1 の permission matrix を実装済みで、context menu、設定 / preview、X URL 抽出、ChatGPT adapter、clipboard fallback、pending cleanup も実装済みである。PR #13 の修正前 foreground / background smoke はともに prompt の視覚的挿入後に自動送信されず、clipboard fallback も失敗した。HEAD `5cf1416` の re-smoke では foreground の送信成功、background hidden の composer write gate failure、background clipboard DOM copy の成功を確認した。これを根拠に background 自動送信を撤回し foreground-only とする option 2 を Accepted とした。安全に実行できない状態は option 5 の no-op + 明示的 feedback へ終端化する。
+- 現行 Manifest は v0.1.1 の permission matrix を実装済みで、context menu、設定 / preview、X URL 抽出、ChatGPT adapter、clipboard fallback、pending cleanup も実装済みである。PR #13 の修正前 foreground / background smoke はともに prompt の視覚的挿入後に自動送信されず、clipboard fallback も失敗した。PR #13 の修正コミット `5cf1416` の re-smoke では foreground の送信成功、background hidden の composer write gate failure、ADR 0003 採択前の background clipboard DOM copy の成功を確認した。これを根拠に background 自動送信を撤回し foreground-only とする option 2 を Accepted とした。現行の hidden 経路は clipboard を操作せず、安全に実行できない状態は option 5 の no-op + 明示的 feedback へ終端化する。
 
 ### 修正前 build の実機 smoke（履歴）
 
@@ -29,11 +29,11 @@
 - 両経路の clipboard diagnostics は `status=clipboard-failed`、`failureCategory=write-failed`、`lifecycleCategory=none`、`cleanupFailureCategory=none`。offscreen lifecycle failure ではなく clipboard write operation rejection と切り分けられた。
 - ChatGPT composer は contenteditable の ProseMirror `div` で複数の直下 `p` 要素へ正規化される。`textContent` 完全一致 gate が段落改行を保持できず、複数行 prompt の書き込み確認を誤って拒否する原因を特定し、段落 plain-text 復元と単回 offscreen DOM copy を実装した。prompt・selection・clipboard 内容は記録しない。
 
-### HEAD `5cf1416` の修正後 re-smoke
+### PR #13 の修正コミット `5cf1416` における re-smoke
 
 - foreground は `status=sent`、`phase=send`、`attempted=true`、`failureReason=none`、`visibilityState=visible`、composer / send 候補各 1、全 attachment `attached`。メッセージ送信成功、入力欄は空、banner なし。
 - background hidden sample は `status=selector-mismatch`、`phase=composer`、`attempted=false`、`failureReason=composer-write-unconfirmed`、composer 候補 1・composer `attached`、container / send は `unknown`・0。メッセージ未送信、入力欄に prompt が残り、banner が表示された。hidden document で React / ProseMirror state readiness を保証できないことが最有力の残存原因である。
-- background の clipboard fallback は `status=copied`、`failureCategory=none`、`cleanupFailureCategory=none`、`lifecycleCategory=none`、`bannerShown=true`。clipboard DOM copy の実機成功を確認した。Console に残った visible `sent` は直前の foreground ログであり、background 成功の証拠にはしない。retry / 二重送信は発生していない。
+- 同じ ADR 0003 採択前の別 background 実験では clipboard fallback が `status=copied`、`failureCategory=none`、`cleanupFailureCategory=none`、`lifecycleCategory=none`、`bannerShown=true` となり、clipboard DOM copy の実機成功を確認した。現行の hidden 経路は clipboard fallback を行わない。Console に残った visible `sent` は直前の foreground ログであり、background 成功の証拠にはしない。retry / 二重送信は発生していない。
 
 ## 強い default
 
@@ -82,10 +82,10 @@
 - 正式なデータ分類、ユーザーの個人情報・機密情報を選択しない注意、保持 / 削除の実機検証。
 - 公開者情報、Privacy Policy 公開 URL、正式名称、アクセシビリティ、スクリーンショット。
 
-## 次の判断経路
+## 継続判断経路
 
-1. composer の段落 plain-text 復元と単回 offscreen DOM copy の最小修正、および 84 tests の結果を維持する。
-2. [v0.1 実装計画](v0.1-implementation-plan.md) の Step 8 として実施した re-smoke の結果を、foreground success / background hidden fail-closed / clipboard copied として記録する。
-3. Accepted とした ADR 0003 に従い、`openInBackground` 設定 UI / 保存を削除し、旧保存値を無視して target を foreground に固定する。permission、外部通信、データ境界は変更しない。
+1. composer の段落 plain-text 復元、単回 offscreen DOM copy、84 tests を検証済み baseline として維持する。
+2. [v0.1 実装計画](v0.1-implementation-plan.md) の Step 8、Issue #3 / #4、Issue #6 の smoke 結果を回帰確認の baseline として維持する。
+3. Accepted の ADR 0003 に従い、foreground target、旧 `openInBackground` 保存値無視、hidden 時 fail-closed を維持する。permission、外部通信、データ境界は変更しない。
 4. Issue #6 の smoke 結果と permission、Privacy、Security、test fixture、acceptance criteria の整合を維持し、残る Release Gate として Security / Privacy review、正式名称、CWS listing、Privacy URL、サポート窓口を確定する。
 5. background paste-only は将来 Issue 候補として別管理する。安全に実行できない状態は option 5 の no-op + 明示的 feedback へ終端化し、追加 retry / clipboard 操作を行わない。

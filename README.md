@@ -6,7 +6,7 @@ ContextFling は、X で選択した文章を新しい ChatGPT Web の会話へ�
 
 ## 現在の状態
 
-v0.1.1 の失敗経路を 72 tests で検証しています。PR #13 の 2026-08-26 修正前 build では foreground / background とも prompt 挿入後の自動送信と clipboard fallback が失敗しました。原因修正後の HEAD `5cf1416` を Chrome 実機で再確認した結果、foreground は送信成功、background は hidden document の React / ProseMirror state readiness を保証できず fail-closed しました。background の clipboard fallback 自体は `copied` まで成功していますが、自動送信は成立していません。修正前後とも自動 retry と二重送信は発生していません。この結果を受け、[ADR 0003](docs/adr/0003-background-chatgpt-handoff-withdrawal.md) で background 自動送信を撤回し、foreground-only（option 2）を Accepted としました。安全に実行できない状態は option 5（no-op + 明示的 feedback）で終端化します。option 3（background paste-only）は次点の将来 Issue 候補です。ChatGPT Web の DOM に依存する Experimental 機能であり、Chrome Web Store にはまだ公開していません。v0.1.0 は `about:blank` 完了イベントの既知 race を含むため非推奨です。
+v0.1.1 の失敗経路を 84 tests で検証しています。PR #13 の 2026-08-26 修正前 build では foreground / background とも prompt 挿入後の自動送信と clipboard fallback が失敗しました。PR #13 の修正コミット `5cf1416` を Chrome 実機で再確認した結果、foreground は送信成功、background は hidden document の React / ProseMirror state readiness を保証できず fail-closed しました。ADR 0003 採択前の background 実験では clipboard DOM copy 自体は `copied` まで成功しましたが、自動送信は成立していません。修正前後とも自動 retry と二重送信は発生していません。この結果を受け、[ADR 0003](docs/adr/0003-background-chatgpt-handoff-withdrawal.md) で background 自動送信を撤回し、foreground-only（option 2）を Accepted としました。現行の hidden 経路は clipboard を操作せず、固定 feedback と cleanup へ終端します。2026-08-27 の Chrome `151.0.7922.140` (arm64) では、foreground-only の target 前面表示、旧保存値無視、logged-out clipboard fallback、target close 後の no-retry を追加確認しました。安全に実行できない状態は option 5（no-op + 明示的 feedback）で終端化します。option 3（background paste-only）は次点の将来 Issue 候補です。ChatGPT Web の DOM に依存する Experimental 機能であり、Chrome Web Store にはまだ公開していません。v0.1.0 は `about:blank` 完了イベントの既知 race を含むため非推奨です。
 
 現行の主な挙動は次のとおりです。
 
@@ -14,7 +14,7 @@ v0.1.1 の失敗経路を 72 tests で検証しています。PR #13 の 2026-08
 - 選択文は前後の空白と改行を正規化し、8,000 UTF-16 code units を上限にします。選択位置に近い status URL を優先し、取得できない場合は許可された X / Twitter ページ URL を query/hash なしで使います。
 - 初回は、実際に送る prompt、URL、選択文、宛先、DOM 自動操作と clipboard fallback のリスクをプレビューします。明示的に同意した場合だけ権限を要求します。
 - 同意後は毎回新しい `https://chatgpt.com/` タブを前面に開きます。バックグラウンド表示の設定はありません。旧バージョンの `openInBackground` 保存値が残っていても無視します。
-- ChatGPT Web への DOM 入力・送信は一度だけ試行します。失敗時は自動再送せず、clipboard fallback と ChatGPT タブ内の banner で案内します。
+- ChatGPT Web への DOM 入力・送信は一度だけ試行します。安全に保証できる bounded failure だけで clipboard fallback を一度実行し、ChatGPT タブ内の固定 banner で案内します。hidden など追加操作を安全に保証できない状態では clipboard を操作せず、自動再送もしません。
 - action は設定画面を開きます。送信履歴、選択文の履歴、URL 履歴は拡張機能内に保存しません。
 
 ChatGPT Web には公式の拡張機能連携 API を使っていません。ログイン状態、Cookie、token、既存会話は読み取りません。選択文と sanitized URL は、ユーザーの同意後に第三者である ChatGPT Web へ渡ります。詳細は [PRIVACY.md](PRIVACY.md) を確認してください。
@@ -68,7 +68,7 @@ GitHub Release の ZIP 配布は CWS 未公開の Experimental 配布です。CW
 4. X / Twitter 上の文章を選択し、右クリックの `ChatGPTで解説する` を実行します。
 5. 初回 preview で送信内容と宛先を確認し、同意するか拒否します。
 
-v0.1.1 では、実アカウントの機密情報を選択せずに実機 smoke を行っています。修正前 build では foreground / background とも prompt の視覚的挿入後に自動送信されず、clipboard fallback も `write-failed` で失敗しました。段落 plain-text 復元と offscreen 単回 DOM copy を実装した HEAD `5cf1416` の re-smoke では、foreground が `status=sent` / `phase=send` / `attempted=true` / `failureReason=none`、`visibilityState=visible`、composer / send 候補各 1、全 attachment `attached` となり、メッセージ送信、入力欄の空、banner なしを確認しました。background は hidden sample が `status=selector-mismatch` / `phase=composer` / `attempted=false` / `failureReason=composer-write-unconfirmed`、composer 候補 1・composer `attached`、container / send は `unknown`・0 で、メッセージ未送信、入力欄への prompt 残留、banner 表示となりました。background の clipboard fallback は `status=copied`、`failureCategory=none`、`cleanupFailureCategory=none`、`lifecycleCategory=none`、`bannerShown=true` でした。Console に残った visible `sent` は直前の foreground ログであり、background 成功の証拠にはしません。これを根拠に background 自動送信の撤回と foreground-only を採択しました。安全に実行できない予期しない状態は option 5 の no-op + 明示的 feedback へ終端化し、option 3 の background paste-only は将来 Issue 候補として分離します。foreground-only 化後も、ChatGPT のログイン済み・未ログイン、DOM 変更、同意撤回、旧保存値無視、送信一回・cleanup を追加確認する実機 gate が残っています。
+v0.1.1 では、実アカウントの機密情報を選択せずに実機 smoke を行っています。修正前 build では foreground / background とも prompt の視覚的挿入後に自動送信されず、clipboard fallback も `write-failed` で失敗しました。段落 plain-text 復元と offscreen 単回 DOM copy を実装した PR #13 の修正コミット `5cf1416` の re-smoke では、foreground が `status=sent` / `phase=send` / `attempted=true` / `failureReason=none`、`visibilityState=visible`、composer / send 候補各 1、全 attachment `attached` となり、メッセージ送信、入力欄の空、banner なしを確認しました。background は hidden sample が `status=selector-mismatch` / `phase=composer` / `attempted=false` / `failureReason=composer-write-unconfirmed`、composer 候補 1・composer `attached`、container / send は `unknown`・0 で、メッセージ未送信、入力欄への prompt 残留、banner 表示となりました。同じ ADR 0003 採択前の background 実験では clipboard fallback が `status=copied`、`failureCategory=none`、`cleanupFailureCategory=none`、`lifecycleCategory=none`、`bannerShown=true` でした。Console に残った visible `sent` は直前の foreground ログであり、background 成功の証拠にはしません。これを根拠に background 自動送信の撤回と foreground-only を採択し、現行の hidden 経路では clipboard fallback を行いません。2026-08-27 の [Issue #6 smoke](docs/testing/chrome-116-smoke.md) では、foreground target、旧保存値無視、F1–F3 の単回送信・composer cleanup、F4 の target close 後の no-retry、F5 の logged-out clipboard success banner を確認しました。F4 の送信成否は確認せず、pending cleanup は自動テストで補完しています。DOM 変更、timeout、`send-unknown`、clipboard failure / offscreen edge も安全な手動再現を避け、84 tests で補完しています。安全に実行できない予期しない状態は option 5 の no-op + 明示的 feedback へ終端化し、option 3 の background paste-only は将来 Issue 候補として分離します。
 
 ## 設計と制約
 
@@ -82,7 +82,7 @@ v0.1.1 では、実アカウントの機密情報を選択せずに実機 smoke 
 
 ## 公開状態
 
-ソースリポジトリは [GitHub で Public OSS として公開済み](https://github.com/y4shiro/contextfling) です。ソース公開と拡張機能の公開リリースは別であり、Chrome Web Store への提出は、実機 smoke、Security / Privacy review、正式名称、掲載素材、Privacy Policy の公開 URL、サポート窓口を確認してから行います。
+ソースリポジトリは [GitHub で Public OSS として公開済み](https://github.com/y4shiro/contextfling) です。ソース公開と拡張機能の公開リリースは別であり、Chrome Web Store への提出は、Security / Privacy review、正式名称、掲載素材、Privacy Policy の公開 URL、サポート窓口を確認してから行います。
 
 ## ライセンス
 
