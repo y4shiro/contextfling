@@ -757,7 +757,7 @@ async function handleTargetTabUpdated(
     return;
   }
   if (navigationState === "ready") {
-    void processTargetTab(payload.id).catch(() => undefined);
+    await processTargetTab(payload.id);
   }
 }
 
@@ -945,6 +945,8 @@ if (typeof chrome !== "undefined" && chrome.runtime) {
 export {
   CHATGPT_URL,
   classifyTargetNavigationUrl,
+  handleTabRemoved,
+  handleTargetTabUpdated,
   isSettingsPageSender,
   MENU_DOCUMENT_URL_PATTERNS,
   MENU_ID,
