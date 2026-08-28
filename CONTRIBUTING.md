@@ -6,7 +6,7 @@ ContextFling v0.1.1 は実装済みの Experimental Chrome 拡張機能 OSS で�
 
 ## 配布と公開
 
-- v0.1.0 は GitHub Releases の Experimental prerelease として、`dist/` の内容をアーカイブ直下にした ZIP で手動配布します。GitHub Release の ZIP 配布と Chrome Web Store 公開は別です。
+- v0.1.1 は GitHub Releases の Experimental prerelease として、`dist/` の内容をアーカイブ直下にした ZIP で手動配布します。GitHub Release の ZIP 配布と Chrome Web Store 公開は別です。v0.1.0 は `about:blank` 完了イベント race の既知不具合により非推奨です。
 - Chrome Web Store への提出・公開は自動化しません。CI、Actions、agent、スクリプトに CWS の submit / publish を追加・実行せず、将来もリリース単位のユーザーの明示承認後に、ユーザーが手動操作します。
 
 ## 変更前に確認すること
