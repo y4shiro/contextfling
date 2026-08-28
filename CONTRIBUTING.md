@@ -30,16 +30,20 @@ ContextFling v0.1.1 は実装済みの Experimental Chrome 拡張機能 OSS で�
 ```text
 Issue
 ↓
-Issue-linked branch
+Issue に紐づく working branch
 ↓
-Draft PR
+最小の意味ある初期 commit
 ↓
-Implementation / Review / Fix
+push
 ↓
-Human Merge
+Draft PR（必須）
+↓
+substantial implementation / Review / Fix
+↓
+Human maintainer Merge / Release Gate
 ```
 
-Issue は要件と受入条件、PR は実装・検証・レビューの状態を扱います。詳細な関連付け、引き継ぎ、validation、レビュー、Merge のルールは [Agent 支援開発ワークフロー](docs/development/agent-workflow.md) を参照してください。
+通常の変更では、最小の意味ある初期 commit を push した直後、substantial implementation 前に Draft PR を必ず作成します。Draft PR 後の意味ある commit は同じ branch に push し、同じ PR に反映します。空 commit、空 PR、無意味な細切れ push は要求しません。push または Draft PR 作成ができない場合は substantial implementation に進まず、blocker と未反映 commit を報告します。Issue は要件と受入条件、PR は実装・検証・レビューの状態を扱います。詳細な関連付け、例外、引き継ぎ、validation、レビュー、Merge のルールは [Agent 支援開発ワークフロー](docs/development/agent-workflow.md) を参照してください。
 
 ## 開発環境
 
