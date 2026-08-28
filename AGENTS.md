@@ -65,7 +65,8 @@
 ## Issue / Branch / Pull Request workflow
 
 - Issue-driven planning / Issue-linked branching / PR-driven execution を基本とし、Issue を Why / What / Requirements / Acceptance Criteria の正本とする。
-- 通常タスクでは Issue に紐づく working branch を作成し、可能なら branch 名に Issue 番号を含める。最初の意味のある commit 後、substantial implementation を続ける前を目安に Draft PR を作成する。
+- 通常タスクは `Issue → working branch → 最小の意味ある初期 commit → push → Draft PR → substantial implementation` の順に進める。初期 commit の push 直後、substantial implementation 前に Draft PR を必ず作成する。空 commit、空 PR、無意味な細切れ push は要求しない。
+- Draft PR 作成後の意味のある commit は同じ working branch に push し、同じ PR に反映する。push または Draft PR 作成ができない場合は substantial implementation に進まず、blocker と未反映 commit を報告する。trivial change と複数 PR 分割の例外は詳細ワークフローに従う。
 - PR を実装・レビュー・検証の共有作業場所とし、今回修正する問題は PR review / comment に残す。scope 外の改善は新規 Issue へ分離する。
 - Review finding は妥当性を Requirements と実装に照らして検証してから修正し、Ready / Merge 前に必要な validation を行う。
 - 既定の Review Agent は親 Codex Sol とし、Issue、PR diff、関連コード、validation 結果を自ら確認して final review と修正後の re-review を行う。Implementation Agent の説明だけを根拠にしない。

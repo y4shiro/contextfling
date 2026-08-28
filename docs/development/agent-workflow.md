@@ -22,11 +22,13 @@ Issue
   ↓
 Issue に紐づく working branch
   ↓
-first meaningful commit
+最小の意味ある初期 commit
   ↓
-Draft PR
+push
   ↓
-Implementation
+Draft PR（必須）
+  ↓
+substantial implementation
   ↓
 Validation
   ↓
@@ -95,11 +97,13 @@ refactor/73-destination-adapter
 
 Issue 番号を含めることで、人間と Agent が branch から Issue を逆引きしやすくなり、GitHub 検索とセッションをまたぐ復元が容易になります。ただし、branch 名だけを正式な Issue 関連付けとはみなしません。
 
-### 4. first meaningful commit と Draft PR
+### 4. 最小の意味ある初期 commit、push、Draft PR
 
-空の PR は作りません。最初の意味のある commit を作成して push した後、substantial implementation を長く続ける前を Draft PR 作成の目安とします。
+通常の実装タスクでは、Issue に紐づく working branch に最小の意味ある初期 commit を作成し、push します。その push の直後、substantial implementation に進む前に Draft PR を必ず作成します。初期 commit は空でない実装・文書・テストなど、作業の開始点として意味のある最小単位とし、空 commit、空 PR、CI を起動するためだけの無意味な細切れ push は要求しません。
 
-Draft PR 作成後は、原則として同じ branch / PR 上で実装、検証、レビュー、修正、再レビューを継続します。未完了の Draft PR には、現在の状態、未完了事項、blocker、次の作業を本文またはコメントで残し、別 Agent が復元できるようにします。
+Draft PR 作成後の意味のある commit は、同じ working branch に push し、同じ PR に反映します。その後も同じ branch / PR 上で実装、検証、レビュー、修正、再レビューを継続します。未完了の Draft PR には、現在の状態、未完了事項、blocker、次の作業、validation の状態を本文またはコメントで継続記録し、別 Agent が復元できるようにします。
+
+初期 commit の push または Draft PR の作成ができない場合は、substantial implementation に進みません。作業を止め、発生した blocker と remote または PR に未反映の commit（ある場合）を報告します。Draft PR を作り直すための空 commit や無意味な細切れ push も行いません。
 
 ### 5. Implementation と Validation
 
@@ -303,7 +307,7 @@ PR には各結果、未実行の項目と理由を記録します。Chrome 実�
 
 ## CI と Draft PR
 
-早い段階で Draft PR を作ることで、CI とレビュー可能な差分を早期に利用できます。ただし、CI のために意味のない push を増やすことは要求しません。現時点の CI 構成は変更せず、将来コストや実行時間が問題になった場合は、次のような運用へ変更できる余地を残します。
+初期 commit の push 直後に必須の Draft PR を作ることで、CI とレビュー可能な差分を早期に利用できます。ただし、CI のために空 commit や意味のない細切れ push を増やすことは要求しません。現時点の CI 構成は変更せず、将来コストや実行時間が問題になった場合は、次のような運用へ変更できる余地を残します。
 
 ```text
 Draft PR

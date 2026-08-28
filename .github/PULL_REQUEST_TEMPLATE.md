@@ -18,10 +18,21 @@
 
 ## Status / Blockers / Next Steps
 
-<!-- Draft の場合は未完了事項、blocker、次の作業を記載してください。 -->
+<!-- Draft PR ではこの欄を継続更新し、現在の状態、未完了事項、blocker、次の作業を記録してください。push の blocker がある場合は、未反映 commit も記載してください。 -->
+
+- Current status:
+- Unfinished items:
+  - [ ]
+- Blockers:
+  - None
+- Next steps:
+  1.
 
 ## Validation
 
+<!-- Draft PR では検証を実行するたびにチェックと結果を更新し、未実行の項目と理由を残してください。 -->
+
+- Validation status: Not started
 - [ ] `npm run lint`
 - [ ] `npm run typecheck`
 - [ ] `npm test`
