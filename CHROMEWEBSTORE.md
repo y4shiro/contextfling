@@ -2,7 +2,7 @@
 
 > 最終更新: 2026-08-27
 >
-> v0.1.1 実装済み・Experimental。Chrome 実機では foreground 自動送信成功、background hidden document の送信前 fail-closed、clipboard DOM copy 成功を確認。ADR 0003 で foreground-only を採択。Chrome Web Store には未公開。
+> v0.1.1 実装済み・Experimental。Chrome 実機では foreground 自動送信成功と background hidden document の送信前 fail-closed を確認。clipboard DOM copy の background 成功は ADR 0003 採択前の別実験であり、現行の hidden 経路は clipboard を操作しない。ADR 0003 で foreground-only を採択。Chrome Web Store には未公開。
 
 ## 配布方針
 
@@ -108,21 +108,21 @@ DOM 失敗時には、bounded failure に限り同意済みの prompt を clipbo
 
 **ソースリポジトリ**: [GitHub で Public OSS として公開済み](https://github.com/y4shiro/contextfling)。ソース公開は CWS 公開を意味しません。
 
-**Chrome Web Store**: 未公開。追加実機シナリオ、Security / Privacy review、正式名称、素材、Privacy Policy URL、サポート窓口、利用規約確認を終えるまで提出しません。
+**Chrome Web Store**: 未公開。Issue #6 の追加実機 smoke は完了しました。Security / Privacy review、正式名称、素材、Privacy Policy URL、サポート窓口、利用規約確認を終えるまで提出しません。
 
 | バージョン | 日付 | 変更 | 状態 |
 | --- | --- | --- | --- |
-| 0.1.1 | 2026-08-24 / 2026-08-27 | `about:blank` 完了イベント race、ChatGPT handoff の失敗経路、ProseMirror composer readback、単回 clipboard fallback、optional permission 撤回後の個別確認を修正。Chrome 実機で foreground の X→ChatGPT 自動送信成功、background hidden の fail-closed、clipboard DOM copy 成功を確認。ADR 0003 で foreground-only を採択。Chrome 151 で permission拒否・許可・撤回・再同意・tab close・idle Service Worker復帰を確認し、部分 permission timing は自動テストで補完。 | GitHub Experimental prerelease（ZIP） / CWS未公開 |
+| 0.1.1 | 2026-08-24 / 2026-08-27 | `about:blank` 完了イベント race、ChatGPT handoff の失敗経路、ProseMirror composer readback、単回 clipboard fallback、optional permission 撤回後の個別確認を修正。ADR 0003 で foreground-only を採択。Chrome 151 で permission / consent smoke と Issue #6 の selection/status URL、page URL fallback、foreground target、旧保存値無視、target close、logged-out clipboard success banner を確認。安全な手動再現不能項目は自動テストで補完。 | GitHub Experimental prerelease（ZIP） / CWS未公開 |
 | 0.1.0 | 2026-08-24 | X selection、preview / consent、ChatGPT Web Experimental handoff、clipboard fallback、設定画面、最小権限 Manifest を実装。 | Deprecated（`about:blank` 完了イベント race 既知） / CWS未公開 |
 | 0.0.0 | 2026-08-24 | Manifest V3 の初期スキャフォールド。 | Superseded |
 
 ## Review notes と Release Gate
 
 - ChatGPT Web DOM automation は公式連携ではなく、DOM 変更、React / ProseMirror state readiness、未ログイン、送信結果不明、利用条件、CWS 審査のリスクがあります。foreground-only でも fail-closed、send 最大一回、自動 retry なし、送信結果不明時の再送なしを維持します。
-- Chrome 116 以上で foreground の X→ChatGPT 自動送信成功は実機確認済みです。background hidden document は送信前に fail-closed し、clipboard DOM copy は成功しました。安全に実行できない状態は no-op + 明示的 feedback とし、background paste-only は次点の将来 Issue 候補です。
-- permission/consent の拒否、許可、撤回、再同意、tab close、idle Service Worker 復帰は Chrome 151 で確認しました。foreground-only 化後に target が前面で開くこと、旧 `openInBackground` 保存値を無視すること、logged-out、DOM failure、clipboard success / failure を追加確認する Release Gate が残っています。
+- Chrome `151.0.7922.140` (arm64) の代表実機で foreground の X→ChatGPT 自動送信成功を確認しました。background hidden document は送信前に fail-closed しました。clipboard DOM copy の background 成功は ADR 0003 採択前の別実験であり、現行の hidden 経路では clipboard を操作しません。この結果を Chrome 116 以上の全バージョンへ一般化しません。安全に実行できない状態は no-op + 明示的 feedback とし、background paste-only は次点の将来 Issue 候補です。
+- permission/consent の拒否、許可、撤回、再同意、tab close、idle Service Worker 復帰、および Issue #6 の foreground target、旧 `openInBackground` 保存値無視、logged-out clipboard success は Chrome 151 で確認しました。DOM 変更・timeout・`send-unknown`・clipboard failure / offscreen edge は安全な手動再現を避け、84 tests で補完しました。
 - 正式名称、商標、掲載素材、Privacy Policy 公開 URL、連絡先、CWS data disclosure の最終入力が未完了です。
 - GitHub Release の ZIP は `dist/` の内容を直下にした手動配布物です。CWS への提出・公開を行う場合は、別の Release Gate とリリース単位のユーザー明示承認を完了し、ユーザーが手動操作します。
-- 追加実機シナリオと Security / Privacy review の結果により、Experimental scope を撤回または変更する可能性があります。変更時は ADR と関連文書を更新します。
+- 今後の回帰 smoke と Security / Privacy review の結果により、Experimental scope を撤回または変更する可能性があります。変更時は ADR と関連文書を更新します。
 
 提出前に上記の未完了項目、`CHANGELOG.md`、LICENSE、CONTRIBUTING、Security、Privacy、権限 warning、ChatGPT / OpenAI の利用規約を確認します。

@@ -4,7 +4,7 @@
 >
 > Working Name（仮称）: ContextFling
 >
-> 現状: `src/manifest.json` は v0.1.0 の permission matrix を実装済み。Chrome 実機 X→ChatGPT smoke と CWS 公開は未完了。
+> 現状: `src/manifest.json` は v0.1.1 の permission matrix を実装済み。2026-08-27 の Chrome 151 で permission / consent と Issue #6 の X→ChatGPT smoke を完了。CWS 公開は未完了。
 
 ## 参照した Chrome 公式ページ
 
@@ -89,4 +89,4 @@ project-local の `chrome-extensions` Skill は `tab.url` に `tabs` permission 
 
 ## 設計への適用
 
-この確認結果を反映した設計は [v0.1 design](v0.1-design.md)、判断と撤回条件は [ADR 0001](../adr/0001-experimental-chatgpt-web-handoff.md)、実装順序と検証状況は [v0.1 implementation plan](v0.1-implementation-plan.md) にある。現行コードには permission、settings、X extractor、ChatGPT DOM adapter、clipboard fallback が実装済みである。Chrome 実機 smoke と CWS 公開は残存 gate である。
+この確認結果を反映した設計は [v0.1 design](v0.1-design.md)、判断と撤回条件は [ADR 0001](../adr/0001-experimental-chatgpt-web-handoff.md)、実装順序と検証状況は [v0.1 implementation plan](v0.1-implementation-plan.md) にある。現行コードには permission、settings、X extractor、ChatGPT DOM adapter、clipboard fallback が実装済みである。Chrome 151 の permission / consent と Issue #6 の実機 smoke は完了済みで、Security / Privacy review、正式名称・掲載素材・Privacy Policy 公開 URL、CWS 公開は残存 gate である。

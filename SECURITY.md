@@ -2,7 +2,7 @@
 
 ## 現在のサポート状況
 
-ContextFling v0.1.1 は ChatGPT Web DOM automation を含む Experimental build です。Chrome 実機では foreground 自動送信に成功しましたが、background の自動送信と clipboard fallback は失敗しており未保証です。Chrome Web Store には未公開です。未リリースのコードについてもセキュリティ問題を受け付けます。
+ContextFling v0.1.1 は ChatGPT Web DOM automation を含む Experimental build です。Chrome 実機で foreground 自動送信に成功し、background hidden document は送信前に fail-closed しました。ADR 0003 採択前の別実験では clipboard DOM copy に成功しています。この結果から background 自動送信を撤回して foreground-only を採択し、現行の hidden 経路は clipboard を操作しません。Chrome 151 の Issue #6 smoke では target 前面表示、旧保存値無視、logged-out fallback、target close 後の no-retry を確認しています。Chrome Web Store には未公開です。未リリースのコードについてもセキュリティ問題を受け付けます。
 
 ## System and Scope
 
@@ -45,7 +45,7 @@ ContextFling v0.1.1 は ChatGPT Web DOM automation を含む Experimental build 
 ## Known Limitations and Compensating Controls
 
 - ChatGPT Web の DOM は公式・安定した連携仕様ではありません。selector、ログイン画面、入力欄、送信結果が変わると自動入力に失敗する可能性があります。adapter を分離し、retry 禁止、clipboard fallback、固定 banner で影響を限定します。
-- Chrome 実機では foreground 成功、background の prompt 挿入、自動送信失敗、clipboard fallback 失敗、固定 banner、retry / 二重送信なしまで確認しました。typed diagnostics による background 原因分離、logged-out、tab close、DOM failure、clipboard success / failure、同意撤回を CWS 公開前の release gate とします。
+- Chrome 151 の実機では foreground 成功、background hidden の送信前 fail-closed、foreground-only target、旧保存値無視、logged-out clipboard success banner、target close 後の no-retry、同意撤回を確認しました。clipboard DOM copy の background 成功は ADR 0003 採択前の別実験であり、現行の hidden 経路では clipboard を操作しません。DOM failure、timeout、`send-unknown`、clipboard failure / offscreen edge は安全な手動再現を避け、84 tests の fail-closed、cleanup、no-retry で補完しています。
 - `chrome.storage` は compare-and-swap を提供しないため、state read/write だけでは排他を保証できません。request ID ごとの直列化、claim ID、adapter attempt marker、期限検査を併用します。10分の TTL は論理失効であり、`alarms` を使わないため物理削除は次の Service Worker 起床・関連イベント、または browser restart などになり得ます。Service Worker 再起動後の stale `injecting` は自動再試行しません。
 - `npm run check:secrets` は未知・難読化された secret を完全には検出しません。変更差分と公開履歴をレビューし、secret が見つかった場合は無効化・履歴対応を優先します。
 - 第三者 ChatGPT Web が受け取ったデータの保持・利用・削除は本拡張機能から制御できません。ユーザーは秘密情報や個人情報を選択しないでください。

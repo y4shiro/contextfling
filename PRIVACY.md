@@ -2,11 +2,11 @@
 
 > Working Name（仮称）: ContextFling
 >
-> 最終更新: 2026-08-26
+> 最終更新: 2026-08-27
 
 ## 状態と適用範囲
 
-ContextFling v0.1.1 は実装済みの Experimental Chrome 拡張機能 OSS です。Chrome 実機では foreground 自動送信に成功し、background hidden document は送信前に fail-closed、clipboard DOM copy は成功しました。この結果を受け、background 自動送信を撤回し、foreground-only を採択しています。Chrome Web Store には公開していません。この文書は、採択したデータフローと privacy 境界を説明します。正式名称、公開 URL、連絡先は CWS 提出前に確定します。
+ContextFling v0.1.1 は実装済みの Experimental Chrome 拡張機能 OSS です。Chrome 実機では foreground 自動送信に成功し、background hidden document は送信前に fail-closed しました。ADR 0003 採択前の別実験では clipboard DOM copy も成功しました。この結果を受け、background 自動送信を撤回し、foreground-only を採択しています。現行の hidden 経路は clipboard を操作せず、固定 feedback と cleanup へ終端します。2026-08-27 の Chrome 151 では foreground target、旧保存値無視、logged-out clipboard fallback、target close 後の no-retry を確認しました。Chrome Web Store には公開していません。この文書は、採択したデータフローと privacy 境界を説明します。正式名称、公開 URL、連絡先は CWS 提出前に確定します。
 
 ## データフロー
 
