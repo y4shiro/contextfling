@@ -1,10 +1,10 @@
 # プロジェクトコンテキストレビュー
 
-> レビュー日: 2026-08-27
+> レビュー日: 2026-08-28
 >
 > Working Name（仮称）: ContextFling
 
-> 現状更新: v0.1.1 実装済み。ADR 0003 で background 自動送信を撤回し foreground-only を Accepted。2026-08-27 の Chrome `151.0.7922.140` (arm64) / Extension `0.1.1` で Issue #6 の実機 smoke を完了し、selection/status URL、page URL fallback、foreground target、旧保存値無視、logged-out clipboard fallback、target close 後の no-retry を確認した。安全に手動再現できない DOM 変更・timeout・`send-unknown`・clipboard failure / offscreen edge は 84 tests で補完した。Chrome Web Store 未公開。
+> 現状更新: v0.1.1 実装済み。ADR 0003 で background 自動送信を撤回し foreground-only を Accepted。2026-08-27 の Chrome `151.0.7922.140` (arm64) / Extension `0.1.1` で Issue #6 の実機 smoke を完了し、selection/status URL、page URL fallback、foreground target、旧保存値無視、logged-out clipboard fallback、target close 後の no-retry を確認した。安全に手動再現できない DOM 変更・timeout・`send-unknown`・clipboard failure / offscreen edge は 88 tests で補完した。Chrome Web Store 未公開。
 
 この文書は、立ち上げ時の要求と Accepted Experimental design を分類し、実装前の境界を監査可能にするための記録です。詳細な責務、state machine、permission matrix、受入条件は [v0.1 設計書](v0.1-design.md)、判断の根拠と撤回条件は [ADR 0001](../adr/0001-experimental-chatgpt-web-handoff.md) を参照します。
 
@@ -77,14 +77,14 @@
 
 ## 不足論点
 
-- PR #13 の修正前 build で判明した composer write gate failure と clipboard write rejection は、段落 plain-text 復元と単回 offscreen DOM copy で修正し、foreground-only を Accepted とした。Issue #3 / #4 と [Issue #6 の Chrome smoke](../testing/chrome-116-smoke.md) で foreground、visibility race、permission / consent、logged-out、旧 `openInBackground` 保存値無視、target close を確認した。DOM 変更・timeout・`send-unknown`・clipboard failure / offscreen edge は安全な手動再現を避け、84 tests で補完した。追加 Security / Privacy review は未完了。
+- PR #13 の修正前 build で判明した composer write gate failure と clipboard write rejection は、段落 plain-text 復元と単回 offscreen DOM copy で修正し、foreground-only を Accepted とした。Issue #3 / #4 と [Issue #6 の Chrome smoke](../testing/chrome-116-smoke.md) で foreground、visibility race、permission / consent、logged-out、旧 `openInBackground` 保存値無視、target close を確認した。DOM 変更・timeout・`send-unknown`・clipboard failure / offscreen edge は安全な手動再現を避け、88 tests で補完した。追加 Security / Privacy review は未完了。
 - ChatGPT/OpenAI の利用条件と CWS 審査で Experimental DOM automation を扱う根拠。
 - 正式なデータ分類、ユーザーの個人情報・機密情報を選択しない注意、保持 / 削除の実機検証。
 - 公開者情報、Privacy Policy 公開 URL、正式名称、アクセシビリティ、スクリーンショット。
 
 ## 継続判断経路
 
-1. composer の段落 plain-text 復元、単回 offscreen DOM copy、84 tests を検証済み baseline として維持する。
+1. composer の段落 plain-text 復元、単回 offscreen DOM copy、88 tests を検証済み baseline として維持する。
 2. [v0.1 実装計画](v0.1-implementation-plan.md) の Step 8、Issue #3 / #4、Issue #6 の smoke 結果を回帰確認の baseline として維持する。
 3. Accepted の ADR 0003 に従い、foreground target、旧 `openInBackground` 保存値無視、hidden 時 fail-closed を維持する。permission、外部通信、データ境界は変更しない。
 4. Issue #6 の smoke 結果と permission、Privacy、Security、test fixture、acceptance criteria の整合を維持し、残る Release Gate として Security / Privacy review、正式名称、CWS listing、Privacy URL、サポート窓口を確定する。

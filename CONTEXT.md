@@ -61,7 +61,7 @@ X / Twitter の恒久 host permission、`tabs`、`notifications`、`alarms`、`c
 
 ## 未完了・既知の制限
 
-- Chrome 実機で foreground 自動送信と background hidden document の送信前 fail-closed を確認しました。ADR 0003 採択前の別実験で clipboard DOM copy の成功、固定 banner、retry / 二重送信なしも確認しています。現行の hidden 経路は clipboard を操作しません。2026-08-27 の Chrome 151 では foreground-only の target 前面表示、旧保存値無視、logged-out clipboard fallback、target close、同意撤回も確認済みです。DOM 変更、timeout、`send-unknown`、clipboard failure / offscreen edge は安全な手動再現を避け、84 tests で補完しています。
+- Chrome 実機で foreground 自動送信と background hidden document の送信前 fail-closed を確認しました。ADR 0003 採択前の別実験で clipboard DOM copy の成功、固定 banner、retry / 二重送信なしも確認しています。現行の hidden 経路は clipboard を操作しません。2026-08-27 の Chrome 151 では foreground-only の target 前面表示、旧保存値無視、logged-out clipboard fallback、target close、同意撤回も確認済みです。DOM 変更、timeout、`send-unknown`、clipboard failure / offscreen edge は安全な手動再現を避け、88 tests で補完しています。
 - 非機密 diagnostics は Service Worker の開発者 console にだけ出力し、adapter status / phase / typed reason / visibility / DOM attachment /候補数と clipboard category だけを含みます。selection、URL、prompt、clipboard 内容、account 情報、request ID、tab ID は含めず、保存・送信もしません。
 - background 自動送信の撤回と foreground-only は [ADR 0003](docs/adr/0003-background-chatgpt-handoff-withdrawal.md) で Accepted です。安全に実行できない状態は option 5 の no-op + 明示的 feedback へ終端化します。background paste-only は次点の将来 Issue 候補であり、現行仕様へ追加しません。
 - ChatGPT Web の DOM は公式安定 API ではなく、selector 変更で自動入力が失敗する可能性があります。

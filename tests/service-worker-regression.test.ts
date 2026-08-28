@@ -93,6 +93,8 @@ class FakeChromeHarness {
 
   public adapterCallCount = 0;
 
+  public clipboardWriteCount = 0;
+
   public markerObservedBeforeExecute = false;
 
   private trackedPendingKey: string | undefined;
@@ -110,7 +112,10 @@ class FakeChromeHarness {
         onMessage: createListenerEvent(),
         onStartup: createListenerEvent(),
         openOptionsPage: async () => undefined,
-        sendMessage: async () => ({ ok: true }),
+        sendMessage: async () => {
+          this.clipboardWriteCount += 1;
+          return { ok: true };
+        },
       },
       storage: {
         local: new MemoryStorageArea(),
@@ -309,7 +314,7 @@ test("about:blank complete を保留し、ChatGPT complete の重複更新でも
     await serviceWorker.handleTargetTabUpdated(
       targetTabId,
       { status: "complete", url: "about:blank" },
-      targetTab(targetTabId, "about:blank"),
+      targetTab(targetTabId, serviceWorker.CHATGPT_URL),
     );
     assert.equal(harness.adapterCallCount, 0);
     assert.ok(await store.get(payload.id));
@@ -319,12 +324,12 @@ test("about:blank complete を保留し、ChatGPT complete の重複更新でも
     const firstUpdate = serviceWorker.handleTargetTabUpdated(
       targetTabId,
       { status: "complete", url: chatGptUrl },
-      targetTab(targetTabId, chatGptUrl),
+      targetTab(targetTabId, "about:blank"),
     );
     const duplicateUpdate = serviceWorker.handleTargetTabUpdated(
       targetTabId,
       { status: "complete", url: chatGptUrl },
-      targetTab(targetTabId, chatGptUrl),
+      targetTab(targetTabId, "about:blank"),
     );
     await Promise.all([firstUpdate, duplicateUpdate]);
 
@@ -426,6 +431,7 @@ test("selector-mismatch/timeout/send-unknown 後の同一更新は adapter を�
         targetTab(targetTabId, chatGptUrl),
       );
       assert.equal(harness.adapterCallCount, 1, status);
+      assert.equal(harness.clipboardWriteCount, 1, status);
       assert.equal(await store.get(payload.id), null, status);
 
       await serviceWorker.handleTargetTabUpdated(
@@ -434,6 +440,7 @@ test("selector-mismatch/timeout/send-unknown 後の同一更新は adapter を�
         targetTab(targetTabId, chatGptUrl),
       );
       assert.equal(harness.adapterCallCount, 1, status);
+      assert.equal(harness.clipboardWriteCount, 1, status);
     } finally {
       restoreChrome();
     }

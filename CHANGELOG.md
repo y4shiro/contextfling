@@ -16,8 +16,9 @@
 - jsdom fixture で foreground、hidden document、delayed hydration、controlled input 未反映、DOM replacement / detached、send control 不在 / disabled / duplicate、synthetic click no-op、send-unknown を検証しました。
 - offscreen 未作成 / create race / create 後 unavailable、clipboard unavailable / write rejection、response failure、close failure、同時 fallback、Service Worker restart 相当の cleanup を検証しました。
 - Chrome 151.0.7922.140（arm64）で permission 拒否・許可・撤回・再同意、consent tab close、idle Service Worker 復帰を確認しました。部分 permission の timing window は利用者向け UI で再現できないため、自動テストで補完しました。
-- 同じ Chrome 151 で Issue #6 の selection/status URL、page URL fallback、foreground target、旧保存値無視、target close 後の no-retry、別 profile の logged-out clipboard success banner を確認しました。DOM 変更・timeout・`send-unknown`・clipboard failure / offscreen edge は安全な手動再現を避け、84 tests で補完しました。
-- `npm test`: 84 tests passed。
+- 同じ Chrome 151 で Issue #6 の selection/status URL、page URL fallback、foreground target、旧保存値無視、target close 後の no-retry、別 profile の logged-out clipboard success banner を確認しました。DOM 変更・timeout・`send-unknown`・clipboard failure / offscreen edge は安全な手動再現を避け、88 tests で補完しました。
+- Issue #11 の synthetic Chrome API 回帰テストで、`about:blank` 完了の保留から目的 URL 完了への遷移、重複 `onUpdated`、保存済み restart marker、target / consent tab close、selector-mismatch・timeout・`send-unknown` 後の no-retry（adapter と clipboard write は各一回）を確認しました。
+- `npm test`: 88 tests passed。
 
 ## 0.1.1 - 2026-08-24（GitHub Experimental prerelease）
 
