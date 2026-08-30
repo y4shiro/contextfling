@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { basename, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { findSecretMatches } from "./check-secrets.mjs";
 
 const projectRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const sourceManifestPath = resolve(projectRoot, "src/manifest.json");
@@ -209,6 +210,37 @@ async function readReleaseFiles() {
   return files;
 }
 
+function findReleaseSecretMatches(files) {
+  const findings = [];
+
+  for (const file of files) {
+    if (file.data.includes(0)) continue;
+
+    const text = file.data.toString("utf8");
+    for (const match of findSecretMatches(text)) {
+      findings.push({
+        detector: match.detector,
+        line: match.line,
+        path: file.path,
+      });
+    }
+  }
+
+  return findings;
+}
+
+function assertReleaseFilesHaveNoSecrets(files) {
+  const findings = findReleaseSecretMatches(files);
+  if (findings.length === 0) return;
+
+  const details = findings
+    .map((finding) => `${finding.path}:${finding.line} (${finding.detector})`)
+    .join(", ");
+  throw new Error(
+    `Release secret scan failed: ${findings.length} finding(s): ${details}`,
+  );
+}
+
 function createLocalHeader(name, data) {
   const header = Buffer.alloc(30);
   const checksum = crc32(data);
@@ -329,6 +361,7 @@ async function main() {
   await assertDistLayout();
   const version = await assertVersionsMatch();
   const files = await readReleaseFiles();
+  assertReleaseFilesHaveNoSecrets(files);
   const archive = createZip(files);
   const archivePath = resolve(releaseDir, `contextfling-v${version}.zip`);
   const checksumPath = `${archivePath}.sha256`;
@@ -349,8 +382,10 @@ async function main() {
 
 export {
   assertDistLayout,
+  assertReleaseFilesHaveNoSecrets,
   assertVersionsMatch,
   createZip,
+  findReleaseSecretMatches,
   inspectDistDirectory,
 };
 

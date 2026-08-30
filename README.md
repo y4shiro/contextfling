@@ -42,23 +42,59 @@ npm run check:secrets
 
 `npm run build` は Service Worker、設定ページ、offscreen clipboard ページを bundle し、静的 HTML/CSS と Manifest を `dist/` へ配置します。`dist/` は生成物であり、Git 管理対象外です。
 
+### GitHub Experimental prerelease 用 ZIP の生成と確認
+
+GitHub の Experimental prerelease に添付する候補 ZIP は、次のコマンドで生成します。
+
+```sh
+npm run package:release
+```
+
+このコマンドは build を実行した後、`package.json`、`src/manifest.json`、`dist/manifest.json` の version が一致することと、`dist/` に余分なファイルがないことを検証します。出力先は `release/contextfling-v<manifest version>.zip` と、その SHA-256 checksum である `release/contextfling-v<manifest version>.zip.sha256` です。`release/` と `dist/` は生成物であり、Git 管理対象外です。
+
+build 後は7つの release files に既存の高確度 secret detector を適用し、検出時は値を表示せずにパッケージ処理を失敗させますが、既知パターン中心のため、未知または難読化された secret は既存の secret scan と同様に検出できない場合があります。
+
+ZIP は次の7 runtime filesだけをアーカイブ直下に含みます。`manifest.json` は展開先の直下にあり、`dist/` は一段も入りません。
+
+```text
+manifest.json
+offscreen.js
+offscreen.html
+service-worker.js
+settings/settings.css
+settings/settings.html
+settings/settings.js
+```
+
+`Load unpacked` の前に、ダウンロードまたは生成した ZIP の checksum と内容を確認します。`<version>` は `src/manifest.json` の `version` に置き換えてください。
+
+```sh
+(cd release && shasum -a 256 -c "contextfling-v<version>.zip.sha256")
+unzip -Z1 "release/contextfling-v<version>.zip"
+```
+
+`unzip -Z1` の結果が上記7ファイルと一致することを確認してから ZIP を解凍し、解凍先の直下に `manifest.json` があることを確認します。checksum/content の確認は、手動 unpacked load 前に毎回行います。
+
 ### タスク管理
 
 タスク、bug、Release Gate は [GitHub Issues](https://github.com/y4shiro/contextfling/issues)、リリースや目標単位は [Milestone](https://github.com/y4shiro/contextfling/milestone/1) で管理します。開発手順とPRのルールは [CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。
 
 ### GitHub Releases の Experimental prerelease
 
-v0.1.1 は [GitHub Releases の一覧](https://github.com/y4shiro/contextfling/releases) から、`Prerelease` と表示された Experimental prerelease の ZIP を手動配布します。配布 ZIP は `dist/` の内容をアーカイブ直下に置きます。つまり、解凍後に選択するフォルダの直下に `manifest.json` があり、`dist/` が一段入れ子にならない構成です。これは Chrome Web Store への公開とは別の配布です。v0.1.0 の ZIP は既知の race のため非推奨です。
+GitHub では、[Releases の一覧](https://github.com/y4shiro/contextfling/releases)で `Prerelease` と表示した Experimental prerelease に、上記手順で生成した ZIP を手動で添付します。これは Chrome Web Store への公開とは別の配布です。v0.1.0 の ZIP は既知の race のため非推奨です。
+
+公開済み v0.1.1 の ZIP と現行 `main` は一致しておらず、Issue #8 の監査で確認された Release blocker は未解消です。ローカルで候補 ZIP を生成・検証できたこと、または既存の GitHub Release が存在することを、現行リリースの完了・差し替え完了とはみなしません。バージョンの決定・変更と GitHub Release の作成・公開は Human Gate です。
 
 ダウンロードして手動で読み込む手順:
 
-1. GitHub Releases の一覧から `Prerelease` と表示された v0.1.1 の ZIP をダウンロードします。
-2. ZIP を解凍し、直下に `manifest.json` があるフォルダを確認します。
-3. Chrome で `chrome://extensions` を開き、Developer mode を有効にします。
-4. `Load unpacked` を押し、解凍したフォルダを選択します（ZIP ファイルや、その親フォルダではありません）。
-5. X / Twitter 上の文章を選択し、右クリックの `ChatGPTで解説する` を実行します。
+1. GitHub Releases の一覧から `Prerelease` と表示された Experimental prerelease の ZIP と `.sha256` を取得します。
+2. 上記の checksum と内容一覧を確認し、ZIP を解凍します。
+3. 解凍先の直下に `manifest.json` があることを確認します。
+4. Chrome で `chrome://extensions` を開き、Developer mode を有効にします。
+5. `Load unpacked` を押し、確認済みの解凍フォルダを選択します（ZIP ファイルや、その親フォルダではありません）。
+6. X / Twitter 上の文章を選択し、右クリックの `ChatGPTで解説する` を実行します。
 
-GitHub Release の ZIP 配布は CWS 未公開の Experimental 配布です。CWS への提出・公開は、別の Release Gate を満たし、リリース単位でユーザーが明示承認した後に手動で行います。CI、Actions、agent、スクリプトから CWS の submit / publish は行いません。
+GitHub Release の ZIP 配布は CWS 未公開の Experimental 配布です。この手順に CWS の submit / publish を追加せず、credential、API key、token も要求・使用しません。CWS への提出・公開は、別の Release Gate を満たし、リリース単位でユーザーが明示承認した後に、ユーザーが手動で行います。CI、Actions、agent、スクリプトから CWS の submit / publish は行いません。
 
 ### ローカル unpacked extension の確認
 
