@@ -1,14 +1,51 @@
 # Chrome Web Store 提出メモ — ContextFling
 
-> 最終更新: 2026-08-28
+> 最終更新: 2026-08-30
 >
 > v0.1.1 実装済み・Experimental。Chrome 実機では foreground 自動送信成功と background hidden document の送信前 fail-closed を確認。clipboard DOM copy の background 成功は ADR 0003 採択前の別実験であり、現行の hidden 経路は clipboard を操作しない。ADR 0003 で foreground-only を採択。Chrome Web Store には未公開。
 
 ## 配布方針
 
-v0.1.1 は [GitHub Releases の一覧](https://github.com/y4shiro/contextfling/releases) で `Prerelease` と表示された Experimental prerelease として、`dist/` の内容をアーカイブ直下にした ZIP で手動配布します。GitHub Release の ZIP 配布は Chrome Web Store 公開とは別であり、現在 CWS には公開していません。v0.1.0 は `about:blank` 完了イベント race の既知不具合があるため非推奨です。
+GitHub Releases では、`Prerelease` と表示した Experimental prerelease に、`dist/` の内容をアーカイブ直下にした ZIP を手動で添付します。GitHub Release の ZIP 配布は Chrome Web Store 公開とは別であり、現在 CWS には公開していません。v0.1.0 は `about:blank` 完了イベント race の既知不具合があるため非推奨です。
+
+公開済み v0.1.1 の ZIP と現行 `main` は一致しておらず、Issue #8 の監査で確認された Release blocker は未解消です。生成した候補 ZIPや既存のGitHub Releaseを、現行リリースの完了・差し替え完了とは扱いません。バージョンの決定・変更と GitHub Release の作成・公開は Human Gate です。
 
 Chrome Web Store への提出・公開は絶対に自動化しません。CI、Actions、agent、スクリプトから CWS の submit / publish を実装・実行せず、将来もリリース単位のユーザーの明示承認後に、ユーザーが手動操作します。
+
+## GitHub Experimental prerelease 用 ZIP の生成・検証
+
+候補 ZIP はリポジトリのルートで次のコマンドを実行して生成します。
+
+```sh
+npm run package:release
+```
+
+この手順は macOS / Linux の標準的な Info-ZIP `zip` で生成し、`unzip` で検証します。両方を PATH に用意してください（Windows は今回の対応対象外です）。
+
+このコマンドは build を実行し、`package.json`、`src/manifest.json`、`dist/manifest.json` の version の一致と `dist/` の完全な release layout を検証した後、`release/contextfling-v<manifest version>.zip` と `release/contextfling-v<manifest version>.zip.sha256`（SHA-256 checksum）を生成します。`dist/` と `release/` は生成物であり、Git 管理対象外です。
+
+build 後は7つの release files に既存の高確度 secret detector を適用し、検出時は値を表示せずにパッケージ処理を失敗させますが、既知パターン中心のため、未知または難読化された secret は既存の secret scan と同様に検出できない場合があります。
+
+ZIP に含める runtime files は次の7つだけです。すべてアーカイブ直下からの相対パスであり、`manifest.json` は展開先の直下にあります。
+
+```text
+manifest.json
+offscreen.js
+offscreen.html
+service-worker.js
+settings/settings.css
+settings/settings.html
+settings/settings.js
+```
+
+手動で `Load unpacked` する前に、`<version>` を `src/manifest.json` の `version` に置き換えて、checksum と内容一覧を確認します。
+
+```sh
+(cd release && shasum -a 256 -c "contextfling-v<version>.zip.sha256")
+unzip -Z1 "release/contextfling-v<version>.zip"
+```
+
+`unzip -Z1` の結果が上記7ファイルと一致すること、および解凍先の直下に `manifest.json` があることを確認してから、確認済みの解凍フォルダを `Load unpacked` で読み込みます。この手順は GitHub の Experimental prerelease 用であり、CWS の submit / publish を追加せず、credential、API key、token も要求・使用しません。
 
 > タスク管理上の役割: この文書は Chrome Web Store の metadata と開示内容の正本です。active な task / bug / Release Gate の状態・担当・優先度・blocker は [GitHub Issues](https://github.com/y4shiro/contextfling/issues) を正本とし、リリースまたは目標単位のまとまりは [v0.1.x hardening Milestone](https://github.com/y4shiro/contextfling/milestone/1) を参照してください。この文書に active backlog を複製しません。
 
