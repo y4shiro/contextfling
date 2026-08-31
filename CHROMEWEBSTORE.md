@@ -20,6 +20,8 @@ Chrome Web Store への提出・公開は絶対に自動化しません。CI、A
 npm run package:release
 ```
 
+この手順は macOS / Linux の標準的な Info-ZIP `zip` で生成し、`unzip` で検証します。両方を PATH に用意してください（Windows は今回の対応対象外です）。
+
 このコマンドは build を実行し、`package.json`、`src/manifest.json`、`dist/manifest.json` の version の一致と `dist/` の完全な release layout を検証した後、`release/contextfling-v<manifest version>.zip` と `release/contextfling-v<manifest version>.zip.sha256`（SHA-256 checksum）を生成します。`dist/` と `release/` は生成物であり、Git 管理対象外です。
 
 build 後は7つの release files に既存の高確度 secret detector を適用し、検出時は値を表示せずにパッケージ処理を失敗させますが、既知パターン中心のため、未知または難読化された secret は既存の secret scan と同様に検出できない場合があります。

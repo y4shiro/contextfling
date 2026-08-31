@@ -50,6 +50,8 @@ GitHub の Experimental prerelease に添付する候補 ZIP は、次のコマ�
 npm run package:release
 ```
 
+この手順は macOS / Linux の標準的な Info-ZIP `zip` で生成し、`unzip` で検証します。両方を PATH に用意してください（Windows は今回の対応対象外です）。
+
 このコマンドは build を実行した後、`package.json`、`src/manifest.json`、`dist/manifest.json` の version が一致することと、`dist/` に余分なファイルがないことを検証します。出力先は `release/contextfling-v<manifest version>.zip` と、その SHA-256 checksum である `release/contextfling-v<manifest version>.zip.sha256` です。`release/` と `dist/` は生成物であり、Git 管理対象外です。
 
 build 後は7つの release files に既存の高確度 secret detector を適用し、検出時は値を表示せずにパッケージ処理を失敗させますが、既知パターン中心のため、未知または難読化された secret は既存の secret scan と同様に検出できない場合があります。
