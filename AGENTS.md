@@ -2,7 +2,7 @@
 
 > Working Name（仮称）: ContextFling
 
-このファイルは、ContextFling の変更時に継続して適用するプロジェクトルールです。未確定の要件を実装で先に固定せず、変更の必要性・影響・検証方法を明らかにしてください。
+このファイルは、ContextFling の現行ソースに適用する継続ルールです。2026-08-24 公開の v0.1.1 ZIP は別 artifact であり、後続 hardening は [Issue #8](https://github.com/y4shiro/contextfling/issues/8) で管理します。未確定の要件を実装で先に固定せず、変更の必要性・影響・検証方法を明らかにしてください。
 
 ## Chrome 権限
 
@@ -52,7 +52,7 @@
 
 - `ContextFling` は Working Name であり、正式名称・商標・アイコン・ストア文言は未確定である。
 - 製品名をドメインロジック、永続データ形式、公開プロトコル、責務を表す class/function 名へ不要に埋め込まない。branding は少数箇所へ集約する。
-- GitHub のソースリポジトリ公開と拡張機能の公開リリースは別である。v0.1.0 は過去の Experimental prerelease で、`about:blank` 完了イベント race のため非推奨とする。現行ソースの `src/manifest.json` は v0.1.1 であり、公開 ZIP は v0.1.1 の `dist/` の内容をアーカイブ直下にした GitHub Releases の Experimental prerelease として手動配布し、Chrome Web Store には公開しない。公開 ZIP に未反映の後続 hardening は Issue #8 で管理する。
+- GitHub のソースリポジトリ公開と拡張機能の公開リリースは別である。v0.1.0 は過去の Experimental prerelease で、`about:blank` 完了イベント race のため非推奨とする。現行ソースの `src/manifest.json` は v0.1.1 であり、2026-08-24 公開の v0.1.1 ZIP はその時点の `dist/` の内容をアーカイブ直下にした別 artifact として手動配布した。後続 hardening は公開 ZIP に未反映で、[Issue #8](https://github.com/y4shiro/contextfling/issues/8) で管理し、Chrome Web Store には公開しない。
 - Chrome Web Store への提出・公開は絶対に自動化しない。CI、Actions、agent、スクリプトから CWS の submit / publish を実装・実行せず、将来もリリース単位のユーザーの明示承認後に、ユーザーが手動操作する。
 
 ## GLM 利用

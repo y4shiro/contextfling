@@ -2,6 +2,8 @@
 
 > Working Name（仮称）: ContextFling
 
+> 適用範囲: 現行ソース v0.1.1 の実装・検証状態を対象とします。2026-08-24 公開の v0.1.1 ZIP は別 artifact で、後続 hardening（[Issue #8](https://github.com/y4shiro/contextfling/issues/8)）は未反映です。
+
 この文書は、ContextFling v0.1.1 の実装済みの目的・境界・制約を共有するためのものです。実装と設計が食い違う場合は、コード・テスト・関連文書を同じ変更で更新します。
 
 ## 現在の状態

@@ -2,6 +2,8 @@
 
 このファイルは [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) の形式に沿って更新します。
 
+> 適用範囲: `Unreleased` は現行ソース v0.1.1 の後続 hardening と検証を記録します。2026-08-24 公開の v0.1.1 ZIP は下記 0.1.1 の履歴として分離し、公開 ZIP に未反映の差分は [Issue #8](https://github.com/y4shiro/contextfling/issues/8) で管理します。
+
 ## Unreleased
 
 ### Changed
@@ -22,7 +24,7 @@
 
 ## 0.1.1 - 2026-08-24（GitHub Experimental prerelease）
 
-> 最新の手動 ZIP 配布。Chrome 実機で foreground の X→ChatGPT 自動送信成功を確認済み。Chrome Web Store 未公開。
+> 2026-08-24 公開の手動 ZIP。Chrome 実機で foreground の X→ChatGPT 自動送信成功を確認済み。42 tests。後続 hardening は `Unreleased` に分離しています。Chrome Web Store 未公開。
 
 ### Fixed
 
