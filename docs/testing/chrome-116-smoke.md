@@ -125,6 +125,14 @@ selector 不一致は原因候補です。Service Worker の failure reason は�
 
 この候補 ZIP は 2026-08-24 公開 ZIP とは別の未公開 artifact です。Issue #8 の公開 ZIP 不一致は未解消で、version、Release、tag／asset、CWS に変更はありません。
 
+## Issue #24 の修正候補と静的検証（2026-10-06）
+
+現行の新規会話の実入力欄は `form[data-chatgpt-composer][data-composer-placement="home"]` 内の `div[contenteditable="true"][role="textbox"][data-composer-markdown]` でした。ID と `data-testid` はありません。別の新規タブで非機密文字を入力すると、同じ form に `button[type="submit"][aria-label="送信"]` が一つ現れ、入力消去後は消えました。調査入力は消去し、調査タブを閉じました。既存の失敗 target には追加入力・送信していません。Service Worker failure reason は引き続き未取得です。
+
+[PR #25](https://github.com/y4shiro/contextfling/pull/25) の commit `7e8ec6dc48255e101b8bcddab468f240828f6582` は、この実測形状を Destination selector registry に追加しました。現行 DOM の非機密最小 fixture は修正前に selector 未検出で FAIL、修正後に PASS。複数 composer では入力前に停止し、複数 send 候補では送信しないことも確認しました。lint、typecheck、91 tests、build、secret scan（103 tracked/staged snapshots）、diff check は PASS。Manifest、optional permission、外部通信、runtime dependency、version は変更していません。
+
+修正 build の unpacked 読み込みと単回 Chrome 実機 smoke は未完了です。実機用 build は専用 worktree の `dist/` にあり、2026-08-24 公開 ZIP と PR #22 候補 ZIP のどちらにも反映していません。
+
 ## 記録フォーマット
 
 ```text
