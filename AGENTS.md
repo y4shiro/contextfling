@@ -2,7 +2,7 @@
 
 > Working Name（仮称）: ContextFling
 
-このファイルは、ContextFling の変更時に継続して適用するプロジェクトルールです。未確定の要件を実装で先に固定せず、変更の必要性・影響・検証方法を明らかにしてください。
+このファイルは、ContextFling の現行ソースに適用する継続ルールです。2026-08-24 公開の v0.1.1 ZIP は別 artifact であり、後続 hardening は [Issue #8](https://github.com/y4shiro/contextfling/issues/8) で管理します。未確定の要件を実装で先に固定せず、変更の必要性・影響・検証方法を明らかにしてください。
 
 ## Chrome 権限
 
@@ -28,7 +28,7 @@
 
 ## ChatGPT と DOM
 
-- ChatGPT Web DOM automation は原則禁止であり、例外は [ADR 0001](docs/adr/0001-experimental-chatgpt-web-handoff.md) の v0.1 Experimental scope に限る。ADR の Accepted は実装成功や公式連携を意味しない。
+- ChatGPT Web DOM automation は原則禁止であり、例外は [ADR 0001](docs/adr/0001-experimental-chatgpt-web-handoff.md) の v0.1 Experimental scope に限る。現在は foreground の実機成功を確認済みで、[ADR 0003](docs/adr/0003-background-chatgpt-handoff-withdrawal.md) により background 自動送信を撤回し foreground-only を Accepted としている。ADR の Accepted は公式連携や Chrome Web Store 公開を意味しない。
 - 例外を実装する場合も、初回の送信内容・宛先・リスク preview、明示同意、`https://chatgpt.com/*` の optional host permission、selector/adapter 隔離、bounded timeout、retry 禁止、clipboard fallback、banner 表示、実機回帰テストを必須とする。
 - ChatGPT の Cookie、token、auth state、API key は取得しない。既存会話を使わず、毎回新規会話へ限定する。
 - ADR の scope 外の非公開 DOM automation、任意サイトの自動操作、同意を省略した入力・送信、送信結果不明時の再試行は追加しない。
@@ -45,14 +45,14 @@
 
 - セキュリティ、プライバシー、権限、外部通信、branding、公開範囲に影響する変更では、コードと同じ変更で関連文書を更新する。
 - 変更コストが高く複数の妥当な選択肢がある判断、または将来理由を問われる判断は `docs/adr/` に ADR 候補を作る。
-- 未検討の事項を `Accepted` にしない。判断前は `Proposed` または `Draft` とし、根拠・代替案・影響を残す。ADR 0001 は例外的に Accepted だが、Experimental・撤回可能・実機未検証・CWS未公開として扱う。
+- 未検討の事項を `Accepted` にしない。判断前は `Proposed` または `Draft` とし、根拠・代替案・影響を残す。ADR 0001 は例外的に Accepted で、foreground の実機成功は確認済みだが、ADR 0003 により background 自動送信を撤回して foreground-only とし、Experimental・撤回可能・CWS未公開として扱う。
 - Chrome Web Store に関係する変更は `CHROMEWEBSTORE.md` の listing、permission justification、privacy 開示、version history を確認する。
 
 ## Branding と公開
 
 - `ContextFling` は Working Name であり、正式名称・商標・アイコン・ストア文言は未確定である。
 - 製品名をドメインロジック、永続データ形式、公開プロトコル、責務を表す class/function 名へ不要に埋め込まない。branding は少数箇所へ集約する。
-- GitHub のソースリポジトリ公開と拡張機能の公開リリースは別である。v0.1.0 は GitHub Releases の Experimental prerelease として、`dist/` の内容をアーカイブ直下にした ZIP で配布し、Chrome Web Store には公開しない。
+- GitHub のソースリポジトリ公開と拡張機能の公開リリースは別である。v0.1.0 は過去の Experimental prerelease で、`about:blank` 完了イベント race のため非推奨とする。現行ソースの `src/manifest.json` は v0.1.1 であり、2026-08-24 公開の v0.1.1 ZIP はその時点の `dist/` の内容をアーカイブ直下にした別 artifact として手動配布した。後続 hardening は公開 ZIP に未反映で、[Issue #8](https://github.com/y4shiro/contextfling/issues/8) で管理し、Chrome Web Store には公開しない。
 - Chrome Web Store への提出・公開は絶対に自動化しない。CI、Actions、agent、スクリプトから CWS の submit / publish を実装・実行せず、将来もリリース単位のユーザーの明示承認後に、ユーザーが手動操作する。
 
 ## GLM 利用

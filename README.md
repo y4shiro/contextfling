@@ -2,6 +2,8 @@
 
 > Working Name（仮称）: ContextFling
 
+> 適用範囲: 以下の「現在の状態」と主な挙動は現行ソース v0.1.1 を対象とします。2026-08-24 公開の v0.1.1 ZIP は別 artifact で、後続 hardening（[Issue #8](https://github.com/y4shiro/contextfling/issues/8)）は含みません。
+
 ContextFling は、X で選択した文章を新しい ChatGPT Web の会話へ渡し、解説を依頼する Chrome 拡張機能 OSS です。
 
 ## 現在の状態
@@ -48,11 +50,13 @@ npm run check:secrets
 
 ### GitHub Releases の Experimental prerelease
 
-v0.1.1 は [GitHub Releases の一覧](https://github.com/y4shiro/contextfling/releases) から、`Prerelease` と表示された Experimental prerelease の ZIP を手動配布します。配布 ZIP は `dist/` の内容をアーカイブ直下に置きます。つまり、解凍後に選択するフォルダの直下に `manifest.json` があり、`dist/` が一段入れ子にならない構成です。これは Chrome Web Store への公開とは別の配布です。v0.1.0 の ZIP は既知の race のため非推奨です。
+公開済み v0.1.1 は 2026-08-24 に [GitHub Releases の一覧](https://github.com/y4shiro/contextfling/releases) で `Prerelease` と表示された Experimental prerelease の ZIP として手動配布しました。配布 ZIP は `dist/` の内容をアーカイブ直下に置いています。つまり、解凍後に選択するフォルダの直下に `manifest.json` があり、`dist/` が一段入れ子にならない構成です。これは Chrome Web Store への公開とは別の配布です。v0.1.0 の ZIP は既知の race のため非推奨です。
+
+注意: 公開済み v0.1.1 ZIP は公開時点の別 artifact であり、現行ソースにある後続 hardening（[Issue #8](https://github.com/y4shiro/contextfling/issues/8)）は未反映です。2026-08-27 の追加 smoke は現行ソース側の証跡であり、公開 ZIP の追加検証結果ではありません。以下の手順で ZIP を読み込む場合は、現行ソースの状態と公開 ZIP の状態を分けて確認してください。
 
 ダウンロードして手動で読み込む手順:
 
-1. GitHub Releases の一覧から `Prerelease` と表示された v0.1.1 の ZIP をダウンロードします。
+1. GitHub Releases の一覧から、2026-08-24 公開の `Prerelease` と表示された v0.1.1 の ZIP をダウンロードします。
 2. ZIP を解凍し、直下に `manifest.json` があるフォルダを確認します。
 3. Chrome で `chrome://extensions` を開き、Developer mode を有効にします。
 4. `Load unpacked` を押し、解凍したフォルダを選択します（ZIP ファイルや、その親フォルダではありません）。
