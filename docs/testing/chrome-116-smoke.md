@@ -1,6 +1,6 @@
 # Chrome 116+ 実機 smoke
 
-> Status: Chrome manual smoke complete（実機再現不能項目は自動検証で補完） / Chrome Web Store Release Gate は保留
+> Status: 2026-08-27 の Chrome manual smoke は完了（実機再現不能項目は自動検証で補完）。2026-10-06 の現行 ChatGPT Web では自動送信 FAIL を確認し、[Issue #24](https://github.com/y4shiro/contextfling/issues/24) で追跡。Chrome Web Store Release Gate は保留。
 >
 > Tracking: [GitHub Issue #6](https://github.com/y4shiro/contextfling/issues/6)
 
@@ -96,6 +96,34 @@ diff check               passed
 - 今回の手動代表環境は Chrome 151.0.7922.140 です。Chrome 116 以上の全バージョンで同一挙動を保証する実機証跡ではありません。
 - logged-out では自動送信せず clipboard fallback の固定 banner へ終端します。clipboard の内容は読み取らず、ユーザーが必要に応じて手動操作します。
 - Security / Privacy review、正式名称・listing・Privacy URL、Chrome Web Store の審査・公開判断は未完了です。CWS の submit / publish は行わず、Release Gate は保留のままです。
+
+## 現行 ChatGPT Web での失敗確認（2026-10-06）
+
+PR #22 の候補 ZIP を使った実機確認で、X の selection handoff が前面の新規 ChatGPT タブを開いた後、自動入力・送信に失敗しました。これは 2026-08-27 の成功証跡を取り消すものではなく、現在の画面に対する追加の失敗証跡です。
+
+- 確認日: 2026-10-06（JST）
+- Chrome: 151.0.7922.140（Human 確認）
+- Extension: 0.1.1（ツール表示確認）
+- 検証 commit: `e6f619063898dffa2648d19ad0f85c9ce093d862`
+- 候補 ZIP SHA-256: `3d4d9d04a386a31940eae95a1a107296a64f0d6e4f458105dada7e172726da05`
+- 起点: ZIP 専用展開フォルダの直下 Manifest から手動 unpacked load。Human が読み込み成功と、見える範囲で読み込みエラーなしを確認。
+- 詳細証跡: [PR #22 の再実施結果](https://github.com/y4shiro/contextfling/pull/22#issuecomment-6009791354)
+
+初回の設定 action、foreground-only の説明、exact preview、明示同意と Chrome の permission 許可は確認済みです。最初の試行の送信後結果は不明のまま保持し、Human の「今のテストやり直して」という明示指示で独立した単回試行を一回だけ再実施しました。
+
+| 観察項目 | 結果 | 確認主体と範囲 |
+| --- | --- | --- |
+| 新規 target | 一つ、前面／visible | ツール。操作前後の tab metadata と本文領域の visibility を確認。 |
+| 自動送信 | FAIL | ツール。user message 0 件、assistant message 0 件、composer 空。 |
+| banner | clipboard-copied の固定表示 | ツール。拡張所有 banner のみを読み取り。clipboard 内容や実際のコピー内容は未読。 |
+| 追加 target／retry／二重送信 | 観察なし | 作成から 5 秒以上経過後も同じ target 一つ、message 0 件、composer 空、banner 表示継続。内部の全 attempt 履歴の監査ではない。 |
+| 現行 composer | 既存 registry に一致しない | 本文領域の実入力欄は DIV、contenteditable=true、role=textbox、id 空、data-testid なし。既存 composer selector の一致候補は 0 件。 |
+
+selector 不一致は原因候補です。Service Worker の failure reason は未取得であり、timeout／logged-out などの原因をこの記録だけで確定しません。後続の調査・修正・実機再確認は Issue #24 とその修正 PR で扱います。現時点で自動送信成功を主張しません。
+
+観察は本文領域と拡張所有 banner に限定し、私的 sidebar／既存会話履歴を取得していません。実機 DOM の改変、test hook、常駐 script、追加の貼り付け・送信、自動 retry は行っていません。選択本文、prompt、会話 URL、account 情報、clipboard 内容は公開証跡に含めません。
+
+この候補 ZIP は 2026-08-24 公開 ZIP とは別の未公開 artifact です。Issue #8 の公開 ZIP 不一致は未解消で、version、Release、tag／asset、CWS に変更はありません。
 
 ## 記録フォーマット
 
