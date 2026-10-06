@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "test": "node scripts/test.mjs",
     "build": "node scripts/build.mjs",
+    "package:release": "node scripts/package-release.mjs",
     "check:secrets": "node scripts/check-secrets.mjs"
   },
   "devDependencies": {
