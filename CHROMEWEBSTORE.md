@@ -1,20 +1,22 @@
 # Chrome Web Store 提出メモ — ContextFling
 
-> 最終更新: 2026-08-30
+> 最終更新: 2026-10-06
 >
 > v0.1.1 実装済み・Experimental。Chrome 実機では foreground 自動送信成功と background hidden document の送信前 fail-closed を確認。clipboard DOM copy の background 成功は ADR 0003 採択前の別実験であり、現行の hidden 経路は clipboard を操作しない。ADR 0003 で foreground-only を採択。Chrome Web Store には未公開。
+>
+> 適用範囲: Manifest、metadata、開示、Release Gate は現行ソースを対象とします。2026-08-24 公開の v0.1.1 ZIP は別 artifact で、後続 hardening（[Issue #8](https://github.com/y4shiro/contextfling/issues/8)）は未反映です。
 
 ## 配布方針
 
-GitHub Releases では、`Prerelease` と表示した Experimental prerelease に、`dist/` の内容をアーカイブ直下にした ZIP を手動で添付します。GitHub Release の ZIP 配布は Chrome Web Store 公開とは別であり、現在 CWS には公開していません。v0.1.0 は `about:blank` 完了イベント race の既知不具合があるため非推奨です。
+公開済み v0.1.1 は 2026-08-24 に [GitHub Releases の一覧](https://github.com/y4shiro/contextfling/releases) で `Prerelease` と表示された Experimental prerelease として、`dist/` の内容をアーカイブ直下にした ZIP で手動配布しました。GitHub Release の ZIP 配布は Chrome Web Store 公開とは別であり、現在 CWS には公開していません。現行ソースの後続 hardening（[Issue #8](https://github.com/y4shiro/contextfling/issues/8)）はこの公開 ZIP に反映されていません。v0.1.0 は `about:blank` 完了イベント race の既知不具合があるため非推奨です。
 
-公開済み v0.1.1 の ZIP と現行 `main` は一致しておらず、Issue #8 の監査で確認された Release blocker は未解消です。生成した候補 ZIPや既存のGitHub Releaseを、現行リリースの完了・差し替え完了とは扱いません。バージョンの決定・変更と GitHub Release の作成・公開は Human Gate です。
+公開済み v0.1.1 の ZIP と現行ソースは一致しておらず、Issue #8 の監査で確認された Release blocker は未解消です。生成した候補 ZIP や既存の GitHub Release を、現行リリースの完了・差し替え完了とは扱いません。バージョンの決定・変更と GitHub Release の作成・公開は Human Gate です。
 
 Chrome Web Store への提出・公開は絶対に自動化しません。CI、Actions、agent、スクリプトから CWS の submit / publish を実装・実行せず、将来もリリース単位のユーザーの明示承認後に、ユーザーが手動操作します。
 
 ## GitHub Experimental prerelease 用 ZIP の生成・検証
 
-候補 ZIP はリポジトリのルートで次のコマンドを実行して生成します。
+現行ソースからの候補 ZIP は、リポジトリのルートで次のコマンドを実行して生成します。この候補 ZIP は未公開で、生成 ZIP の Chrome への手動 unpacked load は Human 確認待ちです。
 
 ```sh
 npm run package:release
@@ -149,7 +151,8 @@ DOM 失敗時には、bounded failure に限り同意済みの prompt を clipbo
 
 | バージョン | 日付 | 変更 | 状態 |
 | --- | --- | --- | --- |
-| 0.1.1 | 2026-08-24 / 2026-08-27 | `about:blank` 完了イベント race、ChatGPT handoff の失敗経路、ProseMirror composer readback、単回 clipboard fallback、optional permission 撤回後の個別確認を修正。ADR 0003 で foreground-only を採択。Chrome 151 で permission / consent smoke と Issue #6 の selection/status URL、page URL fallback、foreground target、旧保存値無視、target close、logged-out clipboard success banner を確認。安全な手動再現不能項目は自動テストで補完。 | GitHub Experimental prerelease（ZIP） / CWS未公開 |
+| Unreleased（現行ソース v0.1.1） | 2026-08-27 / 2026-08-28 | ChatGPT handoff の失敗経路、ProseMirror composer readback、単回 clipboard fallback、optional permission 撤回後の個別確認を修正。ADR 0003 で foreground-only を採択。Chrome 151 で permission / consent smoke と Issue #6 の selection/status URL、page URL fallback、foreground target、旧保存値無視、target close、logged-out clipboard success banner を確認。88 tests で補完。 | 現行ソース（公開 ZIP 未反映） / CWS未公開 |
+| 0.1.1 | 2026-08-24 | `about:blank` 完了イベント race を修正。Chrome 実機で X→ChatGPT 自動送信成功を確認。42 tests。 | GitHub Experimental prerelease（公開 ZIP） / CWS未公開 |
 | 0.1.0 | 2026-08-24 | X selection、preview / consent、ChatGPT Web Experimental handoff、clipboard fallback、設定画面、最小権限 Manifest を実装。 | Deprecated（`about:blank` 完了イベント race 既知） / CWS未公開 |
 | 0.0.0 | 2026-08-24 | Manifest V3 の初期スキャフォールド。 | Superseded |
 

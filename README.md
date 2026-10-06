@@ -2,6 +2,8 @@
 
 > Working Name（仮称）: ContextFling
 
+> 適用範囲: 以下の「現在の状態」と主な挙動は現行ソース v0.1.1 を対象とします。2026-08-24 公開の v0.1.1 ZIP は別 artifact で、後続 hardening（[Issue #8](https://github.com/y4shiro/contextfling/issues/8)）は含みません。
+
 ContextFling は、X で選択した文章を新しい ChatGPT Web の会話へ渡し、解説を依頼する Chrome 拡張機能 OSS です。
 
 ## 現在の状態
@@ -44,7 +46,7 @@ npm run check:secrets
 
 ### GitHub Experimental prerelease 用 ZIP の生成と確認
 
-GitHub の Experimental prerelease に添付する候補 ZIP は、次のコマンドで生成します。
+現行ソースから GitHub の Experimental prerelease に添付する候補 ZIP を生成するには、次のコマンドを実行します。この候補 ZIP は未公開で、生成 ZIP の Chrome への手動 unpacked load は Human 確認待ちです。
 
 ```sh
 npm run package:release
@@ -68,14 +70,14 @@ settings/settings.html
 settings/settings.js
 ```
 
-`Load unpacked` の前に、ダウンロードまたは生成した ZIP の checksum と内容を確認します。`<version>` は `src/manifest.json` の `version` に置き換えてください。
+`Load unpacked` の前に、この手順で生成した候補 ZIP の checksum と内容を確認します。`<version>` は `src/manifest.json` の `version` に置き換えてください。
 
 ```sh
 (cd release && shasum -a 256 -c "contextfling-v<version>.zip.sha256")
 unzip -Z1 "release/contextfling-v<version>.zip"
 ```
 
-`unzip -Z1` の結果が上記7ファイルと一致することを確認してから ZIP を解凍し、解凍先の直下に `manifest.json` があることを確認します。checksum/content の確認は、手動 unpacked load 前に毎回行います。
+`unzip -Z1` の結果が上記7ファイルと一致することを確認してから ZIP を解凍し、解凍先の直下に `manifest.json` があることを確認します。checksum/content の確認は、手動 unpacked load 前に毎回行います。Chrome の `chrome://extensions` で Developer mode を有効にし、`Load unpacked` で確認済みの解凍フォルダを選択してください（ZIP ファイルや、その親フォルダではありません）。
 
 ### タスク管理
 
@@ -83,15 +85,17 @@ unzip -Z1 "release/contextfling-v<version>.zip"
 
 ### GitHub Releases の Experimental prerelease
 
-GitHub では、[Releases の一覧](https://github.com/y4shiro/contextfling/releases)で `Prerelease` と表示した Experimental prerelease に、上記手順で生成した ZIP を手動で添付します。これは Chrome Web Store への公開とは別の配布です。v0.1.0 の ZIP は既知の race のため非推奨です。
+公開済み v0.1.1 は 2026-08-24 に [GitHub Releases の一覧](https://github.com/y4shiro/contextfling/releases) で `Prerelease` と表示された Experimental prerelease の ZIP として手動配布しました。配布 ZIP は `dist/` の内容をアーカイブ直下に置いています。つまり、解凍後に選択するフォルダの直下に `manifest.json` があり、`dist/` が一段入れ子にならない構成です。これは Chrome Web Store への公開とは別の配布です。v0.1.0 の ZIP は既知の race のため非推奨です。
 
-公開済み v0.1.1 の ZIP と現行 `main` は一致しておらず、Issue #8 の監査で確認された Release blocker は未解消です。ローカルで候補 ZIP を生成・検証できたこと、または既存の GitHub Release が存在することを、現行リリースの完了・差し替え完了とはみなしません。バージョンの決定・変更と GitHub Release の作成・公開は Human Gate です。
+注意: 公開済み v0.1.1 ZIP は公開時点の別 artifact であり、現行ソースにある後続 hardening（[Issue #8](https://github.com/y4shiro/contextfling/issues/8)）は未反映です。2026-08-27 の追加 smoke は現行ソース側の証跡であり、公開 ZIP の追加検証結果ではありません。以下の手順で ZIP を読み込む場合は、現行ソースの状態と公開 ZIP の状態を分けて確認してください。
 
-ダウンロードして手動で読み込む手順:
+公開済み v0.1.1 の ZIP と現行ソースは一致しておらず、Issue #8 の監査で確認された Release blocker は未解消です。ローカルで候補 ZIP を生成・検証できたこと、または既存の GitHub Release が存在することを、現行リリースの完了・差し替え完了とはみなしません。バージョンの決定・変更と GitHub Release の作成・公開は Human Gate です。
 
-1. GitHub Releases の一覧から `Prerelease` と表示された Experimental prerelease の ZIP と `.sha256` を取得します。
-2. 上記の checksum と内容一覧を確認し、ZIP を解凍します。
-3. 解凍先の直下に `manifest.json` があることを確認します。
+公開済み v0.1.1 ZIP をダウンロードして手動で読み込む手順:
+
+1. GitHub Releases の一覧から、2026-08-24 公開の `Prerelease` と表示された v0.1.1 の ZIP と `.sha256` をダウンロードします。
+2. ZIP と `.sha256` を同じフォルダに置き、そのフォルダで `shasum -a 256 -c contextfling-v0.1.1.zip.sha256` を実行して一致を確認します。
+3. `unzip -Z1 contextfling-v0.1.1.zip` で内容一覧を確認してから ZIP を解凍し、直下に `manifest.json` があるフォルダを確認します。
 4. Chrome で `chrome://extensions` を開き、Developer mode を有効にします。
 5. `Load unpacked` を押し、確認済みの解凍フォルダを選択します（ZIP ファイルや、その親フォルダではありません）。
 6. X / Twitter 上の文章を選択し、右クリックの `ChatGPTで解説する` を実行します。

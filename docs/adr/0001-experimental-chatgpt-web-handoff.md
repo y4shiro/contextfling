@@ -11,7 +11,7 @@
 
 ## Context
 
-ContextFling の v0.1 は、X を閲覧中に選択した文章を ChatGPT Web の新規会話へ少ない操作で渡すことを目的とする。この Context 節は当時の実装前レビューにおけるリポジトリ状態と設計上の前提を記録する。現在はこの判断に基づく v0.1.0 実装があり、Manifest、設定、handoff、fallback、テストへ反映済みである。
+ContextFling の v0.1 は、X を閲覧中に選択した文章を ChatGPT Web の新規会話へ少ない操作で渡すことを目的とする。この Context 節は当時の実装前レビューにおけるリポジトリ状態と設計上の前提を記録する。この判断に基づく機能は v0.1.0 で実装され、Manifest、設定、handoff、fallback、テストへ反映された。
 
 ChatGPT Web への入力と自動送信は、ChatGPT の非公開・非保証 DOM に依存する実験機能とする。公式 API、公式ブラウザ連携、OpenAI API を使う設計ではない。初回利用では、送信する URL と選択文章、宛先、DOM automation とクリップボード fallback のリスクを正確にプレビューし、ユーザーの明示同意後にだけ有効化する。
 
@@ -54,7 +54,7 @@ ChatGPT Web への入力と自動送信は、ChatGPT の非公開・非保証 DO
 
 ### Permission boundary
 
-実装した permission の詳細と公式根拠は [v0.1 design](../architecture/v0.1-design.md) と [Chrome API verification](../architecture/chrome-api-verification.md) に記録する。以下は当時の選択肢の記録であり、現在の v0.1.0 Manifest 値でもある。
+実装した permission の詳細と公式根拠は [v0.1 design](../architecture/v0.1-design.md) と [Chrome API verification](../architecture/chrome-api-verification.md) に記録する。以下は当時の選択肢と v0.1.0 Manifest 値の記録である。
 
 - Required（v0.1.0 実装値）: `activeTab`, `contextMenus`, `scripting`, `storage`。
 - Optional（v0.1.0 実装値）: `optional_host_permissions` の `https://chatgpt.com/*`、`optional_permissions` の `offscreen` と `clipboardWrite`。

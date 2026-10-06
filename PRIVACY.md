@@ -2,7 +2,9 @@
 
 > Working Name（仮称）: ContextFling
 >
-> 最終更新: 2026-08-27
+> 最終更新: 2026-09-09
+
+> 適用範囲: 以下は現行ソース v0.1.1 のデータフローと privacy 境界です。2026-08-24 公開の v0.1.1 ZIP は別 artifact で、後続 hardening（[Issue #8](https://github.com/y4shiro/contextfling/issues/8)）は未反映です。
 
 ## 状態と適用範囲
 
