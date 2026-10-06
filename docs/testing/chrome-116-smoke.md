@@ -131,7 +131,19 @@ selector 不一致は原因候補です。Service Worker の failure reason は�
 
 [PR #25](https://github.com/y4shiro/contextfling/pull/25) の commit `7e8ec6dc48255e101b8bcddab468f240828f6582` は、この実測形状を Destination selector registry に追加しました。現行 DOM の非機密最小 fixture は修正前に selector 未検出で FAIL、修正後に PASS。複数 composer では入力前に停止し、複数 send 候補では送信しないことも確認しました。lint、typecheck、91 tests、build、secret scan（103 tracked/staged snapshots）、diff check は PASS。Manifest、optional permission、外部通信、runtime dependency、version は変更していません。
 
-修正 build の unpacked 読み込みと単回 Chrome 実機 smoke は未完了です。実機用 build は専用 worktree の `dist/` にあり、2026-08-24 公開 ZIP と PR #22 候補 ZIP のどちらにも反映していません。
+### selector 修正後の単回実機 smoke: FAIL
+
+Human が commit `c7ab4ffdb8c2566cae6bc391fe98873c7856120c` の build を `/tmp/contextfling-pr25-c7ab4ff-YbOJpX/unpacked` から手動読み込みし、非機密の selection menu を一回だけ実行したと回答しました。元の `dist/` とコピー先の全7ファイルの一致をツールで確認しました。Service Worker bundle の SHA-256 は `184ad37900c7e3d8fed7393e841a0e97a34f9f0f2d8ac699e8f41790d535c6f2`、Manifest version は `0.1.1` です。2026-10-06 14:49 JST までの本文領域の観察では、新規 target 一つ・visible、user message 0件、assistant message 0件、composer 非空、clipboard-copied banner となり、送信は FAIL でした。5秒以上経過後も追加 target／二重送信は観察されませんでした。内部の全 attempt 履歴の監査ではありません。既存の失敗 target で再送せず、今回の target でも追加の貼り付け・送信を行っていません。
+
+composer は直下の `p` 内に通常の text node と `span[data-rich-text-generated-autolink][text-link-href]` を持ちました。generated span は、直下の span wrapper 内に空の装飾アイコンと URL の text node を持ち、表示文字とリンク属性の完全一致を真偽値だけで確認しました。既存の読み戻しは `p` 直下の text node だけを許容するため、この構造を `null` として拒否します。Service Worker の実測 failure reason は未取得です。動的リンク属性の値は公開証跡へ転記せず、以降の観察を属性名・構造・真偽値へ限定しました。既存会話、account、clipboard 内容は取得していません。
+
+この build は2026-08-24 公開 ZIP と PR #22 候補 ZIP のどちらにも反映していません。generated autolink の読み戻しへの対応と、その修正後の実機確認は継続中です。
+
+### generated autolink 読み戻しの修正と静的検証
+
+adapter は実測した marker span、単一 wrapper、空の hidden/noneditable icon、単一 text node の形だけを復元します。icon の子要素は span／svg／path に限定し、表示 text node とリンク属性が完全一致する場合だけ本文を連結します。汎用の `textContent` 平坦化は追加せず、全文と送信予定の prompt の完全一致、未知構造の拒否、送信前の再確認を維持します。リンクへアクセスしません。
+
+合成値の fixture で、同期／microtask の変換は修正前 FAIL、修正後 PASS。marker 欠落、リンク属性の不一致、editable／未知／非空 icon では送信せず、送信後も装飾済み composer が残る場合は一回の click 後に send-unknown となることを確認しました。親の直接 review 後、実測に合わせた fixture の label／装飾形状と editable icon の拒否を補い、95 tests、lint、typecheck、build、diff check が通過しました。修正 build の実機確認は未完了です。
 
 ## 記録フォーマット
 
