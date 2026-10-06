@@ -1,6 +1,6 @@
 # Chrome 116+ 実機 smoke
 
-> Status: Chrome manual smoke complete（実機再現不能項目は自動検証で補完） / Chrome Web Store Release Gate は保留
+> Status: 2026-08-27 の Chrome manual smoke は完了（実機再現不能項目は自動検証で補完）。2026-10-06 の現行 ChatGPT Web では自動送信 FAIL を確認し、[Issue #24](https://github.com/y4shiro/contextfling/issues/24) で追跡。Chrome Web Store Release Gate は保留。
 >
 > Tracking: [GitHub Issue #6](https://github.com/y4shiro/contextfling/issues/6)
 
@@ -96,6 +96,54 @@ diff check               passed
 - 今回の手動代表環境は Chrome 151.0.7922.140 です。Chrome 116 以上の全バージョンで同一挙動を保証する実機証跡ではありません。
 - logged-out では自動送信せず clipboard fallback の固定 banner へ終端します。clipboard の内容は読み取らず、ユーザーが必要に応じて手動操作します。
 - Security / Privacy review、正式名称・listing・Privacy URL、Chrome Web Store の審査・公開判断は未完了です。CWS の submit / publish は行わず、Release Gate は保留のままです。
+
+## 現行 ChatGPT Web での失敗確認（2026-10-06）
+
+PR #22 の候補 ZIP を使った実機確認で、X の selection handoff が前面の新規 ChatGPT タブを開いた後、自動入力・送信に失敗しました。これは 2026-08-27 の成功証跡を取り消すものではなく、現在の画面に対する追加の失敗証跡です。
+
+- 確認日: 2026-10-06（JST）
+- Chrome: 151.0.7922.140（Human 確認）
+- Extension: 0.1.1（ツール表示確認）
+- 検証 commit: `e6f619063898dffa2648d19ad0f85c9ce093d862`
+- 候補 ZIP SHA-256: `3d4d9d04a386a31940eae95a1a107296a64f0d6e4f458105dada7e172726da05`
+- 起点: ZIP 専用展開フォルダの直下 Manifest から手動 unpacked load。Human が読み込み成功と、見える範囲で読み込みエラーなしを確認。
+- 詳細証跡: [PR #22 の再実施結果](https://github.com/y4shiro/contextfling/pull/22#issuecomment-6009791354)
+
+初回の設定 action、foreground-only の説明、exact preview、明示同意と Chrome の permission 許可は確認済みです。最初の試行の送信後結果は不明のまま保持し、Human の「今のテストやり直して」という明示指示で独立した単回試行を一回だけ再実施しました。
+
+| 観察項目 | 結果 | 確認主体と範囲 |
+| --- | --- | --- |
+| 新規 target | 一つ、前面／visible | ツール。操作前後の tab metadata と本文領域の visibility を確認。 |
+| 自動送信 | FAIL | ツール。user message 0 件、assistant message 0 件、composer 空。 |
+| banner | clipboard-copied の固定表示 | ツール。拡張所有 banner のみを読み取り。clipboard 内容や実際のコピー内容は未読。 |
+| 追加 target／retry／二重送信 | 観察なし | 作成から 5 秒以上経過後も同じ target 一つ、message 0 件、composer 空、banner 表示継続。内部の全 attempt 履歴の監査ではない。 |
+| 現行 composer | 既存 registry に一致しない | 本文領域の実入力欄は DIV、contenteditable=true、role=textbox、id 空、data-testid なし。既存 composer selector の一致候補は 0 件。 |
+
+selector 不一致は原因候補です。Service Worker の failure reason は未取得であり、timeout／logged-out などの原因をこの記録だけで確定しません。後続の調査・修正・実機再確認は Issue #24 とその修正 PR で扱います。現時点で自動送信成功を主張しません。
+
+観察は本文領域と拡張所有 banner に限定し、私的 sidebar／既存会話履歴を取得していません。実機 DOM の改変、test hook、常駐 script、追加の貼り付け・送信、自動 retry は行っていません。選択本文、prompt、会話 URL、account 情報、clipboard 内容は公開証跡に含めません。
+
+この候補 ZIP は 2026-08-24 公開 ZIP とは別の未公開 artifact です。Issue #8 の公開 ZIP 不一致は未解消で、version、Release、tag／asset、CWS に変更はありません。
+
+## Issue #24 の修正候補と静的検証（2026-10-06）
+
+現行の新規会話の実入力欄は `form[data-chatgpt-composer][data-composer-placement="home"]` 内の `div[contenteditable="true"][role="textbox"][data-composer-markdown]` でした。ID と `data-testid` はありません。別の新規タブで非機密文字を入力すると、同じ form に `button[type="submit"][aria-label="送信"]` が一つ現れ、入力消去後は消えました。調査入力は消去し、調査タブを閉じました。既存の失敗 target には追加入力・送信していません。Service Worker failure reason は引き続き未取得です。
+
+[PR #25](https://github.com/y4shiro/contextfling/pull/25) の commit `7e8ec6dc48255e101b8bcddab468f240828f6582` は、この実測形状を Destination selector registry に追加しました。現行 DOM の非機密最小 fixture は修正前に selector 未検出で FAIL、修正後に PASS。複数 composer では入力前に停止し、複数 send 候補では送信しないことも確認しました。lint、typecheck、91 tests、build、secret scan（103 tracked/staged snapshots）、diff check は PASS。Manifest、optional permission、外部通信、runtime dependency、version は変更していません。
+
+### selector 修正後の単回実機 smoke: FAIL
+
+Human が commit `c7ab4ffdb8c2566cae6bc391fe98873c7856120c` の build を `/tmp/contextfling-pr25-c7ab4ff-YbOJpX/unpacked` から手動読み込みし、非機密の selection menu を一回だけ実行したと回答しました。元の `dist/` とコピー先の全7ファイルの一致をツールで確認しました。Service Worker bundle の SHA-256 は `184ad37900c7e3d8fed7393e841a0e97a34f9f0f2d8ac699e8f41790d535c6f2`、Manifest version は `0.1.1` です。2026-10-06 14:49 JST までの本文領域の観察では、新規 target 一つ・visible、user message 0件、assistant message 0件、composer 非空、clipboard-copied banner となり、送信は FAIL でした。5秒以上経過後も追加 target／二重送信は観察されませんでした。内部の全 attempt 履歴の監査ではありません。既存の失敗 target で再送せず、今回の target でも追加の貼り付け・送信を行っていません。
+
+composer は直下の `p` 内に通常の text node と `span[data-rich-text-generated-autolink][text-link-href]` を持ちました。generated span は、直下の span wrapper 内に空の装飾アイコンと URL の text node を持ち、表示文字とリンク属性の完全一致を真偽値だけで確認しました。既存の読み戻しは `p` 直下の text node だけを許容するため、この構造を `null` として拒否します。Service Worker の実測 failure reason は未取得です。動的リンク属性の値は公開証跡へ転記せず、以降の観察を属性名・構造・真偽値へ限定しました。既存会話、account、clipboard 内容は取得していません。
+
+この build は2026-08-24 公開 ZIP と PR #22 候補 ZIP のどちらにも反映していません。generated autolink の読み戻しへの対応と、その修正後の実機確認は継続中です。
+
+### generated autolink 読み戻しの修正と静的検証
+
+adapter は実測した marker span、単一 wrapper、空の hidden/noneditable icon、単一 text node の形だけを復元します。icon の子要素は span／svg／path に限定し、表示 text node とリンク属性が完全一致する場合だけ本文を連結します。汎用の `textContent` 平坦化は追加せず、全文と送信予定の prompt の完全一致、未知構造の拒否、送信前の再確認を維持します。リンクへアクセスしません。
+
+合成値の fixture で、同期／microtask の変換は修正前 FAIL、修正後 PASS。marker 欠落、リンク属性の不一致、editable／未知／非空 icon では送信せず、送信後も装飾済み composer が残る場合は一回の click 後に send-unknown となることを確認しました。親の直接 review 後、実測に合わせた fixture の label／装飾形状と editable icon の拒否を補い、95 tests、lint、typecheck、build、diff check が通過しました。修正 build の実機確認は未完了です。
 
 ## 記録フォーマット
 

@@ -140,6 +140,106 @@ function adapterInput(
   });
 }
 
+type AutolinkMutation =
+  | "missing-link-marker"
+  | "missing-icon-marker"
+  | "link-value-mismatch"
+  | "editable-icon"
+  | "unknown-icon-descendant"
+  | "nonempty-icon";
+
+async function runAutolinkFixture(
+  timing: "sync" | "microtask",
+  mutation?: AutolinkMutation,
+  clearAfterClick = true,
+) {
+  const markup = await readChatGptFixture("home-composer-autolink.html");
+  const installed = installDom(markup);
+  try {
+    const form = installed.dom.window.document.querySelector(
+      'form[data-chatgpt-composer][data-composer-placement="home"]',
+    );
+    const composer = form?.querySelector(
+      '[contenteditable="true"][role="textbox"][data-composer-markdown]',
+    );
+    const template = form?.querySelector(
+      'template[data-fixture="generated-autolink"]',
+    );
+    assert.ok(form instanceof installed.dom.window.HTMLFormElement);
+    assert.ok(composer instanceof installed.dom.window.HTMLElement);
+    assert.ok(template instanceof installed.dom.window.HTMLTemplateElement);
+
+    const prompt =
+      "Before line\nSee https://example.invalid/context\nAfter line";
+    let clickCount = 0;
+    form.addEventListener("submit", (event) => event.preventDefault());
+    composer.addEventListener("input", () => {
+      const update = () => {
+        const content = template.content.cloneNode(true) as DocumentFragment;
+        const clonedLink = content.querySelector(
+          "span[data-rich-text-generated-autolink]",
+        );
+        const clonedIcon = content.querySelector("span[data-inline-url-icon]");
+        assert.ok(clonedLink instanceof installed.dom.window.Element);
+        assert.ok(clonedIcon instanceof installed.dom.window.Element);
+        switch (mutation) {
+          case "missing-link-marker":
+            clonedLink.removeAttribute("data-rich-text-generated-autolink");
+            break;
+          case "missing-icon-marker":
+            clonedIcon.removeAttribute("data-inline-url-icon");
+            break;
+          case "link-value-mismatch":
+            clonedLink.setAttribute(
+              "text-link-href",
+              "https://example.invalid/different",
+            );
+            break;
+          case "unknown-icon-descendant":
+            clonedIcon.append(
+              installed.dom.window.document.createElement("img"),
+            );
+            break;
+          case "editable-icon":
+            clonedIcon.setAttribute("contenteditable", "true");
+            break;
+          case "nonempty-icon":
+            clonedIcon.append(
+              installed.dom.window.document.createTextNode("unexpected"),
+            );
+            break;
+        }
+        composer.replaceChildren(content);
+
+        const button = installed.dom.window.document.createElement("button");
+        button.type = "submit";
+        button.setAttribute("aria-label", "送信");
+        button.addEventListener("click", () => {
+          clickCount += 1;
+          if (clearAfterClick) {
+            composer.replaceChildren();
+          }
+        });
+        form.append(button);
+      };
+      if (timing === "microtask") {
+        queueMicrotask(update);
+      } else {
+        update();
+      }
+    });
+
+    const result = await runChatGptAdapter(adapterInput(prompt));
+    return {
+      result,
+      clickCount,
+      composerText: composer.textContent ?? "",
+    };
+  } finally {
+    installed.cleanup();
+  }
+}
+
 test("ChatGPT adapter は executeScript の自己完結関数と serializable input を公開する", async () => {
   const [adapterSource, selectorSource] = await Promise.all([
     readFile(
@@ -290,6 +390,188 @@ test("初期から visible composer が複数なら書き込み・送信せず a
   } finally {
     installed.cleanup();
   }
+});
+
+test("現行 home composer は入力後に現れる同一 form の送信ボタンだけを一度押す", async () => {
+  const markup = await readChatGptFixture("home-composer.html");
+  const installed = installDom(markup);
+  try {
+    const form = installed.dom.window.document.querySelector(
+      'form[data-chatgpt-composer][data-composer-placement="home"]',
+    );
+    const composer = form?.querySelector(
+      '[contenteditable="true"][role="textbox"][data-composer-markdown]',
+    );
+    assert.ok(form instanceof installed.dom.window.HTMLFormElement);
+    assert.ok(composer instanceof installed.dom.window.HTMLElement);
+    assert.equal(
+      form.querySelector('button[type="submit"][aria-label="送信"]'),
+      null,
+    );
+    form.addEventListener("submit", (event) => event.preventDefault());
+
+    let clickCount = 0;
+    composer.addEventListener("input", () => {
+      if (form.querySelector('button[type="submit"][aria-label="送信"]')) {
+        return;
+      }
+      const button = installed.dom.window.document.createElement("button");
+      button.type = "submit";
+      button.setAttribute("aria-label", "送信");
+      button.addEventListener("click", () => {
+        clickCount += 1;
+        composer.textContent = "";
+      });
+      form.append(button);
+    });
+
+    const result = await runChatGptAdapter(adapterInput());
+
+    assert.equal(result.status, "sent");
+    assert.equal(result.attempted, true);
+    assert.equal(result.diagnostics.composerCandidateCount, 1);
+    assert.equal(result.diagnostics.sendCandidateCount, 1);
+    assert.equal(clickCount, 1);
+    assert.equal(composer.textContent, "");
+  } finally {
+    installed.cleanup();
+  }
+});
+
+test("現行 home composer が複数なら入力も送信もしない", async () => {
+  const markup = await readChatGptFixture("home-composer.html");
+  const installed = installDom(markup);
+  try {
+    const main = installed.dom.window.document.querySelector("main");
+    assert.ok(main instanceof installed.dom.window.HTMLElement);
+    const originalForm = main.querySelector("form");
+    assert.ok(originalForm instanceof installed.dom.window.HTMLFormElement);
+    main.append(originalForm.cloneNode(true));
+    const composers = installed.dom.window.document.querySelectorAll(
+      'form[data-chatgpt-composer][data-composer-placement="home"] [contenteditable="true"][role="textbox"][data-composer-markdown]',
+    );
+    assert.equal(composers.length, 2);
+
+    const result = await runChatGptAdapter(adapterInput());
+
+    assert.equal(result.status, "selector-mismatch");
+    assert.equal(result.phase, "composer");
+    assert.equal(result.diagnostics.failureReason, "composer-ambiguous");
+    assert.equal(result.diagnostics.composerCandidateCount, 2);
+    assert.equal(result.attempted, false);
+    for (const composer of composers) {
+      assert.equal(composer.textContent, "");
+      assert.equal(composer.closest("form")?.querySelector("button"), null);
+    }
+  } finally {
+    installed.cleanup();
+  }
+});
+
+test("現行 home form の送信候補が複数なら最初を選ばず送信しない", async () => {
+  const markup = await readChatGptFixture("home-composer.html");
+  const installed = installDom(markup);
+  try {
+    const form = installed.dom.window.document.querySelector(
+      'form[data-chatgpt-composer][data-composer-placement="home"]',
+    );
+    const composer = form?.querySelector(
+      '[contenteditable="true"][role="textbox"][data-composer-markdown]',
+    );
+    assert.ok(form instanceof installed.dom.window.HTMLFormElement);
+    assert.ok(composer instanceof installed.dom.window.HTMLElement);
+    form.addEventListener("submit", (event) => event.preventDefault());
+
+    let clickCount = 0;
+    composer.addEventListener("input", () => {
+      for (let index = 0; index < 2; index += 1) {
+        const button = installed.dom.window.document.createElement("button");
+        button.type = "submit";
+        button.setAttribute("aria-label", "送信");
+        button.addEventListener("click", () => {
+          clickCount += 1;
+        });
+        form.append(button);
+      }
+    });
+
+    const result = await runChatGptAdapter(adapterInput());
+
+    assert.equal(result.status, "selector-mismatch");
+    assert.equal(result.phase, "send");
+    assert.equal(result.diagnostics.failureReason, "send-ambiguous");
+    assert.equal(result.diagnostics.sendCandidateCount, 2);
+    assert.equal(result.attempted, false);
+    assert.equal(clickCount, 0);
+    assert.equal(composer.textContent, "fixture prompt");
+  } finally {
+    installed.cleanup();
+  }
+});
+
+test("generated autolink を同期変換しても全文一致で一度だけ送信する", async () => {
+  const { result, clickCount, composerText } = await runAutolinkFixture("sync");
+
+  assert.equal(result.status, "sent");
+  assert.equal(result.attempted, true);
+  assert.equal(clickCount, 1);
+  assert.equal(composerText, "");
+});
+
+test("generated autolink をmicrotask変換しても全文一致で一度だけ送信する", async () => {
+  const { result, clickCount, composerText } =
+    await runAutolinkFixture("microtask");
+
+  assert.equal(result.status, "sent");
+  assert.equal(result.attempted, true);
+  assert.equal(clickCount, 1);
+  assert.equal(composerText, "");
+});
+
+test("generated autolink のmarker・リンク値・icon・構造が不正なら送信しない", async () => {
+  const mutations: AutolinkMutation[] = [
+    "missing-link-marker",
+    "missing-icon-marker",
+    "link-value-mismatch",
+    "editable-icon",
+    "unknown-icon-descendant",
+    "nonempty-icon",
+  ];
+  for (const mutation of mutations) {
+    const { result, clickCount, composerText } = await runAutolinkFixture(
+      "sync",
+      mutation,
+    );
+
+    assert.equal(result.status, "selector-mismatch", mutation);
+    assert.equal(result.phase, "composer", mutation);
+    assert.equal(
+      result.diagnostics.failureReason,
+      "composer-write-unconfirmed",
+      mutation,
+    );
+    assert.equal(result.attempted, false, mutation);
+    assert.equal(clickCount, 0, mutation);
+    assert.notEqual(composerText, "", mutation);
+  }
+});
+
+test("送信後もautolink composerが残る場合はsend-unknownで終端する", async () => {
+  const { result, clickCount, composerText } = await runAutolinkFixture(
+    "sync",
+    undefined,
+    false,
+  );
+
+  assert.equal(result.status, "send-unknown");
+  assert.equal(result.diagnostics.failureReason, "send-result-unknown");
+  assert.equal(result.attempted, true);
+  assert.equal(clickCount, 1);
+  assert.ok(
+    composerText.includes(
+      "Before line\nSee https://example.invalid/context\nAfter line",
+    ),
+  );
 });
 
 test("adapter は foreground で一度だけ送信し、非機密 diagnostics を返す", async () => {

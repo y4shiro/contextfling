@@ -381,6 +381,56 @@ export async function runChatGptAdapter(
     });
   };
 
+  // ChatGPT decorates URLs with an inline link and an empty icon. Validate
+  // that observed shape before including its visible text in exact readback.
+  const getGeneratedAutolinkText = (element: Element): string | null => {
+    if (
+      element.localName !== "span" ||
+      !element.hasAttribute("data-rich-text-generated-autolink")
+    ) {
+      return null;
+    }
+    const outerChildren = Array.from(element.childNodes);
+    if (outerChildren.length !== 1 || outerChildren[0]?.nodeType !== 1) {
+      return null;
+    }
+    const wrapper = outerChildren[0] as Element;
+    if (wrapper.localName !== "span") {
+      return null;
+    }
+    const wrapperChildren = Array.from(wrapper.childNodes);
+    const iconNode = wrapperChildren[0];
+    const linkTextNode = wrapperChildren[1];
+    if (
+      wrapperChildren.length !== 2 ||
+      iconNode?.nodeType !== 1 ||
+      linkTextNode?.nodeType !== 3
+    ) {
+      return null;
+    }
+    const icon = iconNode as Element;
+    if (
+      icon.localName !== "span" ||
+      !icon.hasAttribute("data-inline-url-icon") ||
+      icon.getAttribute("aria-hidden") !== "true" ||
+      icon.getAttribute("contenteditable") !== "false" ||
+      icon.textContent !== ""
+    ) {
+      return null;
+    }
+    const decorativeTags = new Set(["span", "svg", "path"]);
+    for (const descendant of icon.querySelectorAll("*")) {
+      if (!decorativeTags.has(descendant.localName)) {
+        return null;
+      }
+    }
+    const linkText = linkTextNode.nodeValue ?? "";
+    return linkText.length > 0 &&
+      element.getAttribute("text-link-href") === linkText
+      ? linkText
+      : null;
+  };
+
   const getContentEditableText = (element: HTMLElement): string | null => {
     const childNodes = Array.from(element.childNodes);
     if (childNodes.length === 0) {
@@ -426,10 +476,18 @@ export async function runChatGptAdapter(
       }
       let line = "";
       for (const child of children) {
-        if (child.nodeType !== 3) {
+        if (child.nodeType === 3) {
+          line += child.nodeValue ?? "";
+          continue;
+        }
+        if (child.nodeType !== 1) {
           return null;
         }
-        line += child.nodeValue ?? "";
+        const linkText = getGeneratedAutolinkText(child as Element);
+        if (linkText === null) {
+          return null;
+        }
+        line += linkText;
       }
       lines.push(line);
     }
