@@ -3,7 +3,7 @@
 - Status: Draft
 - Date: 2026-10-29
 - Scope: Issue #24 / PR #25、foreground の新規 ChatGPT 会話
-- Nature: Experimental / reversible、実機成功・公式連携・公開承認は未確認
+- Nature: Experimental / reversible、限定した実機成功は確認済み。公式連携・公開承認は未確認
 
 ## Context
 
@@ -34,6 +34,12 @@ contenteditable の書き込みを、実際の `focus()` と composer 内に閉�
 非機密のローカル fixture を隔離した Chromium context で開き、実際の focus と一回の insertText により trusted input event が発生することを確認しました。複数行は p と空の p/br に分かれました。ChatGPT 側の整形を保証する結果ではなく、未知構造を通すために読み戻しを広げる根拠にもしません。JSDOM の編集コマンド mock は呼び出し数・境界・失敗時の停止だけを検証します。
 
 候補の採否には、親の直接レビュー、自動検証、現行 ChatGPT Web の前面の新規会話への非機密・独立単回 smoke が必要です。完了条件は user message 1件、composer 空、追加 target／retry／二重送信なしです。送信結果不明なら再実行しません。成功しても本 ADR を自動で Accepted にせず、公開済み ZIP や CWS の状態は変更しません。
+
+### 実機確認（2026-10-29）
+
+source `7e37e6a6fd14c3709634e0f3ec205e0252459415`、Chrome `156.0.8078.48`、version `0.1.1` の独立した単回 smoke は PASS でした。Human が自動送信を確認し、親のツールも今回の新規 target 一つ、可視 user message bubble 一つ、composer 空、banner なしを確認しました。5秒以上経過後も追加 target／二重送信は観察されず、追加の入力・送信・再実行は行っていません。本文・会話URLは取得していません。
+
+102 tests と静的検証、build、secret scan、CI も PASS です。これは限定した一環境の成功であり、非標準 API や将来の DOM 変更のリスクは残ります。本 ADR は Draft のまま、最終採否と Merge／Release Gate は Human maintainer に残します。
 
 ## Alternatives
 

@@ -1,6 +1,6 @@
 # Chrome 116+ 実機 smoke
 
-> Status: 2026-08-27 の Chrome manual smoke は完了（実機再現不能項目は自動検証で補完）。2026-10-06 の現行 ChatGPT Web では自動送信 FAIL を確認し、[Issue #24](https://github.com/y4shiro/contextfling/issues/24) で追跡。Chrome Web Store Release Gate は保留。
+> Status: 2026-08-27 の Chrome manual smoke は完了（実機再現不能項目は自動検証で補完）。2026-10-06 以降の自動送信 FAIL は [Issue #24](https://github.com/y4shiro/contextfling/issues/24) で追跡し、2026-10-29 の source `7e37e6a` は Chrome 156 の単回実機 smoke で PASS。Chrome Web Store Release Gate は保留。
 >
 > Tracking: [GitHub Issue #6](https://github.com/y4shiro/contextfling/issues/6)
 
@@ -188,6 +188,23 @@ contenteditable の単回ブラウザー編集後、同じ対象の読み戻し�
 102 tests、lint、typecheck、build、secret scan、diff check は PASS です。非空の p に一時的な empty marker が残る fixture を microtask／次の task で正規化し、一回の編集だけで全文一致と送信が成立することを検証しました。永続的な不正構造／不一致と、待機中の hidden／detach／複数候補では送信しません。
 
 親は同じ隔離 Chromium の複数行 fixture を修正前後で確認しました。修正前は command 1回、click 0回、composer-input-structure-unsupported。修正後は command 1回、click 1回、status=sent、composer 空でした。native input event は複数行のブラウザー処理により6回で、編集コマンドの再実行ではありません。ChatGPT 実機成功は引き続き未確認です。
+
+## 整形観察 build の単回実機 smoke: PASS（2026-10-29）
+
+- 記録日時: 2026-10-29 18:13 JST
+- Chrome: `156.0.8078.48`（Human 確認）
+- Extension: `0.1.1`
+- Runtime source commit: `7e37e6a6fd14c3709634e0f3ec205e0252459415`
+- 読み込み folder: `/tmp/contextfling-pr25-6d41bfa-20261029/unpacked`（folder 名の略記は初回 build のまま。全7ファイルを現 source の build と照合）
+- Service Worker bundle SHA-256: `85ca90886d2bbfa0b5de081348900abe5fc74adcf5e6743c21964526aadb8f9a`
+- 操作・確認主体: Human が拡張再読み込み後の一回の実行と自動送信成功を回答。親 Codex が今回の新規 target を前後の tab ID で特定し、本文領域の固定属性・真偽値だけで確認。
+- 証跡: [PR #25 PASS 記録](https://github.com/y4shiro/contextfling/pull/25#issuecomment-6492698116)
+
+ツールの最初の従来方式では `[data-message-author-role]` が0件でしたが、これは現行 DOM にその識別属性がないためであり、未送信の根拠にはしません。本文を読まずに現在の構造を確認し、`main` 内の `[data-user-message-bubble]` が一つで可視、`[data-thread-user-message-navigation-content]` も一つであることを確認しました。composer は一つで空、固定 banner はありませんでした。5秒以上経過後も新規 ChatGPT target は一つでした。追加入力・追加送信・自動再実行は行っておらず、追加 target／二重送信は観察されませんでした。内部の全 attempt 履歴を監査したものではありません。
+
+それ以前の FAIL 記録にある旧 message-role の0件という数だけでは、現行 DOM のメッセージ数を証明できません。中間 build の失敗は固定 failureReason が示す送信前の停止、固定 banner、Human の確認と合わせて扱います。失敗した target へは再送していません。
+
+実入力、会話URL、私的 sidebar、account、clipboard 内容、Cookie、token、auth state は取得・公開していません。過去の FAIL は保持し、今回の限定した実機成功で上書きしません。公開 ZIP への反映、version 変更、Release、CWS 操作はしていません。
 
 ## 記録フォーマット
 
