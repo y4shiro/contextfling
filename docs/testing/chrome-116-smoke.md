@@ -171,6 +171,24 @@ JSDOM の編集模型を使い、単回 command/input、既存入力の保持、
 
 親は隔離したローカル Chromium の一行 prompt と制御された editor fixture でも adapter 全体を実行し、native input 1回、synthetic input 0回、click 1回、status=sent、composer 空を確認しました。直接 DOM 代入の synthetic input を戻す編集模型との比較では、ブラウザー編集の入力だけが保持されました。この fixture は ChatGPT の内部 state を再現・証明するものではありません。複数行の native DOM 形状は editor と browser に依存するため、既知の段落／autolink の厳密な読み戻しを維持し、実機成功は未確認です。
 
+## 単回ブラウザー編集 build の実機診断（2026-10-29）
+
+source `02701d70123438326926e46e481da87266045dc6`、version `0.1.1` の build を同じ読み込みフォルダへ反映し、全7ファイルの一致を確認しました。Service Worker bundle SHA-256 は `1e16c00a0f7e85de153f492990a29bd186cf5375abf15d3c354f18a0adbf7055` です。Chrome 再読み込み後、別の新規会話へ一回だけ実行する手順に対し、Human が実行済みと回答しました。
+
+結果は FAIL でした。ツールは新規 target 一つ、user/assistant message 各0件、composer 非空、clipboard-copied banner を確認しました。5秒以上経過後も新規 target は一つでした。空判定には textarea/input の value と contenteditable の textContent を要素の種類で使い分けました。追加の入力・送信・再実行はしていません。
+
+Human が今回の `failureReason=composer-input-structure-unsupported` を確認しました。操作せずに後から観察した同じ入力欄は、厳密な p／空段落／generated autolink の構造条件に一致していました。これは編集直後の整形が読み戻しより遅い可能性と整合しますが、実際のページ内部処理や文字不一致の内容を取得したものではありません。
+
+親の隔離 Chromium の非機密複数行 fixture でも、native insertText が空段落 marker を複製し、input handler が次の microtask で marker を整えるケースを作ると、同じエラーを再現しました。command 1回、click 0回、attempted=false でした。ChatGPT 内部の再現証明ではありません。入力の追加や parser の許容拡大をせず、短い期限内に同じ対象の厳密な全文一致を観察する候補を検証します。
+
+### 整形完了の観察候補と検証
+
+contenteditable の単回ブラウザー編集後、同じ対象の読み戻しが送信予定の全文と厳密に一致するまで最大 `min(timeoutMs, 1,000ms)` 観察するようにしました。未知構造や文字不一致が期限まで続けば、診断を保持して送信せず終端します。待機中の hidden／detach／複数候補では停止し、observer・visibility listener・timer を解除します。textarea/input の同期経路、既知の段落／autolink parser、送信直前の再確認は維持し、入力や送信は追加しません。
+
+102 tests、lint、typecheck、build、secret scan、diff check は PASS です。非空の p に一時的な empty marker が残る fixture を microtask／次の task で正規化し、一回の編集だけで全文一致と送信が成立することを検証しました。永続的な不正構造／不一致と、待機中の hidden／detach／複数候補では送信しません。
+
+親は同じ隔離 Chromium の複数行 fixture を修正前後で確認しました。修正前は command 1回、click 0回、composer-input-structure-unsupported。修正後は command 1回、click 1回、status=sent、composer 空でした。native input event は複数行のブラウザー処理により6回で、編集コマンドの再実行ではありません。ChatGPT 実機成功は引き続き未確認です。
+
 ## 記録フォーマット
 
 ```text

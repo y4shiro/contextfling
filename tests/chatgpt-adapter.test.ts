@@ -207,9 +207,10 @@ type AutolinkMutation =
   | "nonempty-icon";
 
 async function runAutolinkFixture(
-  timing: "sync" | "microtask",
+  timing: "sync" | "microtask" | "task",
   mutation?: AutolinkMutation,
   clearAfterClick = true,
+  transientCopiedMarker = false,
 ) {
   const markup = await readChatGptFixture("home-composer-autolink.html");
   const installed = installDom(markup);
@@ -227,49 +228,82 @@ async function runAutolinkFixture(
     assert.ok(composer instanceof installed.dom.window.HTMLElement);
     assert.ok(template instanceof installed.dom.window.HTMLTemplateElement);
 
-    const prompt =
-      "Before line\nSee https://example.invalid/context\nAfter line";
+    const prompt = transientCopiedMarker
+      ? "Before line\n\nSee https://example.invalid/context\nAfter line"
+      : "Before line\nSee https://example.invalid/context\nAfter line";
     let clickCount = 0;
     let inputEventCount = 0;
     form.addEventListener("submit", (event) => event.preventDefault());
     composer.addEventListener("input", () => {
       inputEventCount += 1;
       const update = () => {
-        const content = template.content.cloneNode(true) as DocumentFragment;
-        const clonedLink = content.querySelector(
-          "span[data-rich-text-generated-autolink]",
-        );
-        const clonedIcon = content.querySelector("span[data-inline-url-icon]");
-        assert.ok(clonedLink instanceof installed.dom.window.Element);
-        assert.ok(clonedIcon instanceof installed.dom.window.Element);
-        switch (mutation) {
-          case "missing-link-marker":
-            clonedLink.removeAttribute("data-rich-text-generated-autolink");
-            break;
-          case "missing-icon-marker":
-            clonedIcon.removeAttribute("data-inline-url-icon");
-            break;
-          case "link-value-mismatch":
-            clonedLink.setAttribute(
-              "text-link-href",
-              "https://example.invalid/different",
-            );
-            break;
-          case "unknown-icon-descendant":
-            clonedIcon.append(
-              installed.dom.window.document.createElement("img"),
-            );
-            break;
-          case "editable-icon":
-            clonedIcon.setAttribute("contenteditable", "true");
-            break;
-          case "nonempty-icon":
-            clonedIcon.append(
-              installed.dom.window.document.createTextNode("unexpected"),
-            );
-            break;
+        if (transientCopiedMarker) {
+          const paragraphs = prompt.split("\n").map((line) => {
+            const paragraph = installed.dom.window.document.createElement("p");
+            if (line.length === 0) {
+              paragraph.setAttribute("data-empty-paragraph", "true");
+              paragraph.append(
+                installed.dom.window.document.createElement("br"),
+              );
+            } else if (line === "See https://example.invalid/context") {
+              const content = template.content.cloneNode(
+                true,
+              ) as DocumentFragment;
+              const clonedLink = content.querySelector(
+                "span[data-rich-text-generated-autolink]",
+              );
+              assert.ok(clonedLink instanceof installed.dom.window.Element);
+              paragraph.append(
+                installed.dom.window.document.createTextNode("See "),
+                clonedLink,
+              );
+            } else {
+              paragraph.append(
+                installed.dom.window.document.createTextNode(line),
+              );
+            }
+            return paragraph;
+          });
+          composer.replaceChildren(...paragraphs);
+        } else {
+          const content = template.content.cloneNode(true) as DocumentFragment;
+          const clonedLink = content.querySelector(
+            "span[data-rich-text-generated-autolink]",
+          );
+          const clonedIcon = content.querySelector(
+            "span[data-inline-url-icon]",
+          );
+          assert.ok(clonedLink instanceof installed.dom.window.Element);
+          assert.ok(clonedIcon instanceof installed.dom.window.Element);
+          switch (mutation) {
+            case "missing-link-marker":
+              clonedLink.removeAttribute("data-rich-text-generated-autolink");
+              break;
+            case "missing-icon-marker":
+              clonedIcon.removeAttribute("data-inline-url-icon");
+              break;
+            case "link-value-mismatch":
+              clonedLink.setAttribute(
+                "text-link-href",
+                "https://example.invalid/different",
+              );
+              break;
+            case "unknown-icon-descendant":
+              clonedIcon.append(
+                installed.dom.window.document.createElement("img"),
+              );
+              break;
+            case "editable-icon":
+              clonedIcon.setAttribute("contenteditable", "true");
+              break;
+            case "nonempty-icon":
+              clonedIcon.append(
+                installed.dom.window.document.createTextNode("unexpected"),
+              );
+              break;
+          }
+          composer.replaceChildren(content);
         }
-        composer.replaceChildren(content);
 
         const button = installed.dom.window.document.createElement("button");
         button.type = "submit";
@@ -282,8 +316,17 @@ async function runAutolinkFixture(
         });
         form.append(button);
       };
+      if (transientCopiedMarker) {
+        const transientParagraph =
+          installed.dom.window.document.createElement("p");
+        transientParagraph.setAttribute("data-empty-paragraph", "true");
+        transientParagraph.textContent = prompt;
+        composer.replaceChildren(transientParagraph);
+      }
       if (timing === "microtask") {
         queueMicrotask(update);
+      } else if (timing === "task") {
+        globalThis.setTimeout(update, 0);
       } else {
         update();
       }
@@ -787,6 +830,110 @@ test("generated autolink をmicrotask変換しても全文一致で一度だけ�
   assert.equal(inputEventCount, 1);
   assert.deepEqual(execCommandCalls, ["insertText"]);
   assert.equal(composerText, "");
+});
+
+test("一時的なempty markerがmicrotaskまたは次のtaskで正規化されてから一度だけ送信する", async () => {
+  for (const timing of ["microtask", "task"] as const) {
+    const {
+      result,
+      clickCount,
+      inputEventCount,
+      execCommandCalls,
+      composerText,
+    } = await runAutolinkFixture(timing, undefined, true, true);
+
+    assert.equal(result.status, "sent", timing);
+    assert.equal(result.attempted, true, timing);
+    assert.equal(clickCount, 1, timing);
+    assert.equal(inputEventCount, 1, timing);
+    assert.deepEqual(execCommandCalls, ["insertText"], timing);
+    assert.equal(composerText, "", timing);
+  }
+});
+
+test("readback待機中に可視性・対象要素・一意性が失われた場合は送信しない", async () => {
+  const cases = [
+    ["hidden", "document-not-visible"],
+    ["detached", "composer-detached"],
+    ["ambiguous", "composer-ambiguous"],
+  ] as const;
+  for (const [mutation, failureReason] of cases) {
+    const markup = await readChatGptFixture("home-composer-autolink.html");
+    const installed = installDom(markup);
+    const delayedActions: ReturnType<typeof setTimeout>[] = [];
+    try {
+      const document = installed.dom.window.document;
+      const form = document.querySelector("form[data-chatgpt-composer]");
+      const composer = form?.querySelector<HTMLElement>(
+        '[contenteditable="true"][role="textbox"][data-composer-markdown]',
+      );
+      assert.ok(form instanceof installed.dom.window.HTMLFormElement);
+      assert.ok(composer instanceof installed.dom.window.HTMLElement);
+      const button = document.createElement("button");
+      button.type = "submit";
+      button.setAttribute("aria-label", "送信");
+      form.append(button);
+      let clickCount = 0;
+      let duplicate: HTMLElement | null = null;
+      button.addEventListener("click", () => {
+        clickCount += 1;
+      });
+      composer.addEventListener("input", () => {
+        const paragraph = document.createElement("p");
+        paragraph.append(document.createElement("span"));
+        composer.replaceChildren(paragraph);
+        delayedActions.push(
+          globalThis.setTimeout(() => {
+            if (mutation === "hidden") {
+              Object.defineProperty(document, "visibilityState", {
+                configurable: true,
+                value: "hidden",
+              });
+              document.dispatchEvent(
+                new installed.dom.window.Event("visibilitychange"),
+              );
+            } else if (mutation === "detached") {
+              composer.remove();
+            } else {
+              duplicate = composer.cloneNode(false) as HTMLElement;
+              form.append(duplicate);
+            }
+          }, 0),
+        );
+        delayedActions.push(
+          globalThis.setTimeout(() => {
+            Object.defineProperty(document, "visibilityState", {
+              configurable: true,
+              value: "visible",
+            });
+            if (mutation === "detached") {
+              form.append(composer);
+            } else if (mutation === "ambiguous") {
+              duplicate?.remove();
+            }
+            composer.replaceChildren(
+              document.createTextNode("target boundary check"),
+            );
+          }, 20),
+        );
+      });
+
+      const result = await runChatGptAdapter(
+        adapterInput("target boundary check"),
+      );
+
+      assert.equal(result.status, "selector-mismatch", mutation);
+      assert.equal(result.diagnostics.failureReason, failureReason, mutation);
+      assert.equal(result.attempted, false, mutation);
+      assert.equal(clickCount, 0, mutation);
+      assert.deepEqual(installed.execCommandCalls, ["insertText"], mutation);
+    } finally {
+      for (const timer of delayedActions) {
+        globalThis.clearTimeout(timer);
+      }
+      installed.cleanup();
+    }
+  }
 });
 
 test("generated autolink のmarker・リンク値・icon・構造が不正なら送信しない", async () => {

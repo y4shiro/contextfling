@@ -21,6 +21,12 @@ contenteditable の書き込みを、実際の `focus()` と composer 内に閉�
 - 直接 DOM 書き込みを二つ目の入力方法として併用せず、編集コマンドも送信 click も再試行しません。
 - 直後と送信直前の厳密な全文一致、既知の段落と generated autolink の読み戻し、form 所属、一意で enabled な送信 control、可視性の gate は維持します。
 
+### 編集後の整形を待つ候補
+
+単回ブラウザー編集 build `02701d7` でも、Human が `composer-input-structure-unsupported` を確認しました。その後の同じ composer は、操作を追加せずに観察した時点で既存の厳密な構造条件に一致しました。編集直後の正規化タイミングが一つの原因候補です。
+
+書き込みは一回のまま、contenteditable だけで入力後の厳密な全文一致を最大 `min(timeoutMs, 1,000ms)` 観察します。一致すれば進み、期限まで不一致／未知構造なら既存診断と fallback へ終端します。観察中の hidden、対象の detach／置換、一意性喪失では停止し、observer・visibility listener・timer を終端時に解除します。送信直前の全文一致と可視性・一意性・form 所属の確認も残します。待機中の再入力や追加 click は行いません。
+
 ## 公式サポートと検証条件
 
 `execCommand()` は deprecated / non-standard です。MDN は、現在 active な editable element と selection に作用し、input/beforeinput の発火がブラウザーに依存すると説明しています。W3C の編集コマンド文書も Draft で、実装の不一致を明記しています。これは ChatGPT の公式 API や、editor 内部の状態同期を保証する手段ではありません。

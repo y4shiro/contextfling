@@ -544,14 +544,93 @@ export async function runChatGptAdapter(
     return null;
   };
 
-  const fillComposer = (
-    element: Element,
-    prompt: string,
-  ):
+  type ComposerReadbackResult =
     | "exact"
     | "structure-unsupported"
     | "text-mismatch"
-    | ChatGptAdapterFailureReason => {
+    | ChatGptAdapterFailureReason;
+
+  const waitForComposerReadback = async (
+    element: Element,
+    prompt: string,
+    deadlineMs: number,
+  ): Promise<ComposerReadbackResult> => {
+    const inspect = (): ComposerReadbackResult => {
+      const targetFailure = checkComposerTarget(element);
+      if (targetFailure) {
+        return targetFailure;
+      }
+      try {
+        const text = getComposerText(element);
+        return text === prompt
+          ? "exact"
+          : text === null
+            ? "structure-unsupported"
+            : "text-mismatch";
+      } catch {
+        return "composer-write-unconfirmed";
+      }
+    };
+    const initial = inspect();
+    if (initial !== "structure-unsupported" && initial !== "text-mismatch") {
+      return initial;
+    }
+    if (typeof MutationObserver !== "function") {
+      return inspect();
+    }
+
+    const root = document.documentElement ?? document.body;
+    if (!root) {
+      return "composer-write-unconfirmed";
+    }
+    return new Promise((resolve) => {
+      let observer: MutationObserver | null = null;
+      let timer: ReturnType<typeof globalThis.setTimeout> | undefined;
+      let settled = false;
+      const finish = (value: ComposerReadbackResult): void => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        observer?.disconnect();
+        if (timer !== undefined) {
+          globalThis.clearTimeout(timer);
+        }
+        document.removeEventListener("visibilitychange", onVisibilityChange);
+        resolve(value);
+      };
+      const inspectPending = (): void => {
+        const checked = inspect();
+        if (
+          checked !== "structure-unsupported" &&
+          checked !== "text-mismatch"
+        ) {
+          finish(checked);
+        }
+      };
+      const onVisibilityChange = (): void => inspectPending();
+      try {
+        observer = new MutationObserver(inspectPending);
+        observer.observe(root, {
+          subtree: true,
+          childList: true,
+          characterData: true,
+          attributes: true,
+        });
+        document.addEventListener("visibilitychange", onVisibilityChange);
+        timer = globalThis.setTimeout(() => finish(inspect()), deadlineMs);
+        // Observe first, then read again so an intervening mutation cannot be missed.
+        inspectPending();
+      } catch {
+        finish(inspect());
+      }
+    });
+  };
+
+  const fillComposer = (
+    element: Element,
+    prompt: string,
+  ): ComposerReadbackResult | Promise<ComposerReadbackResult> => {
     const isContentEditable =
       element instanceof HTMLElement &&
       element.getAttribute("contenteditable") === "true";
@@ -617,100 +696,103 @@ export async function runChatGptAdapter(
       }
       selection.removeAllRanges();
     };
-    try {
-      element.scrollIntoView({ block: "center", inline: "nearest" });
-      selection = document.getSelection();
-      if (!selection) {
-        return "composer-write-unconfirmed";
-      }
-      for (let index = 0; index < selection.rangeCount; index += 1) {
-        const range = selection.getRangeAt(index);
-        if (
-          !element.contains(range.startContainer) ||
-          !element.contains(range.endContainer)
-        ) {
+    return (async (): Promise<ComposerReadbackResult> => {
+      try {
+        element.scrollIntoView({ block: "center", inline: "nearest" });
+        selection = document.getSelection();
+        if (!selection) {
           return "composer-write-unconfirmed";
         }
-      }
-      element.focus();
-      const focusFailure = checkComposerTarget(element);
-      if (focusFailure) {
-        return focusFailure;
-      }
-      if (document.activeElement !== element) {
-        return "composer-write-unconfirmed";
-      }
-      if (getComposerText(element) !== "") {
-        return "composer-write-unconfirmed";
-      }
-      for (let index = 0; index < selection.rangeCount; index += 1) {
-        const range = selection.getRangeAt(index);
-        if (
-          !element.contains(range.startContainer) ||
-          !element.contains(range.endContainer)
-        ) {
+        for (let index = 0; index < selection.rangeCount; index += 1) {
+          const range = selection.getRangeAt(index);
+          if (
+            !element.contains(range.startContainer) ||
+            !element.contains(range.endContainer)
+          ) {
+            return "composer-write-unconfirmed";
+          }
+        }
+        element.focus();
+        const focusFailure = checkComposerTarget(element);
+        if (focusFailure) {
+          return focusFailure;
+        }
+        if (document.activeElement !== element) {
           return "composer-write-unconfirmed";
         }
-      }
+        if (getComposerText(element) !== "") {
+          return "composer-write-unconfirmed";
+        }
+        for (let index = 0; index < selection.rangeCount; index += 1) {
+          const range = selection.getRangeAt(index);
+          if (
+            !element.contains(range.startContainer) ||
+            !element.contains(range.endContainer)
+          ) {
+            return "composer-write-unconfirmed";
+          }
+        }
 
-      const range = document.createRange();
-      range.selectNodeContents(element);
-      range.collapse(false);
-      selection.removeAllRanges();
-      selection.addRange(range);
-      selectionOwnedByComposer = true;
-      const selectionIsContained = (): boolean => {
-        if (selection?.rangeCount !== 1 || !selection.isCollapsed) {
-          return false;
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        range.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        selectionOwnedByComposer = true;
+        const selectionIsContained = (): boolean => {
+          if (selection?.rangeCount !== 1 || !selection.isCollapsed) {
+            return false;
+          }
+          const activeRange = selection.getRangeAt(0);
+          return (
+            activeRange.collapsed &&
+            element.contains(activeRange.startContainer) &&
+            element.contains(activeRange.endContainer) &&
+            selection.anchorNode !== null &&
+            element.contains(selection.anchorNode) &&
+            selection.focusNode !== null &&
+            element.contains(selection.focusNode)
+          );
+        };
+        const targetFailure = checkComposerTarget(element);
+        if (
+          targetFailure ||
+          document.activeElement !== element ||
+          !selectionIsContained()
+        ) {
+          return targetFailure ?? "composer-write-unconfirmed";
         }
-        const activeRange = selection.getRangeAt(0);
-        return (
-          activeRange.collapsed &&
-          element.contains(activeRange.startContainer) &&
-          element.contains(activeRange.endContainer) &&
-          selection.anchorNode !== null &&
-          element.contains(selection.anchorNode) &&
-          selection.focusNode !== null &&
-          element.contains(selection.focusNode)
+        if (getComposerText(element) !== "") {
+          return "composer-write-unconfirmed";
+        }
+        if (typeof document.execCommand !== "function") {
+          return "composer-write-unconfirmed";
+        }
+        if (!document.execCommand("insertText", false, prompt)) {
+          return "composer-write-unconfirmed";
+        }
+        const postCommandFailure = checkComposerTarget(element);
+        if (postCommandFailure) {
+          return postCommandFailure;
+        }
+        const readback = await waitForComposerReadback(
+          element,
+          prompt,
+          Math.min(timeoutMs, 1_000),
         );
-      };
-      const targetFailure = checkComposerTarget(element);
-      if (
-        targetFailure ||
-        document.activeElement !== element ||
-        !selectionIsContained()
-      ) {
-        return targetFailure ?? "composer-write-unconfirmed";
-      }
-      if (getComposerText(element) !== "") {
+        if (readback !== "exact") {
+          return readback;
+        }
+        keepCaretInComposer = true;
+        return "exact";
+      } catch {
         return "composer-write-unconfirmed";
+      } finally {
+        if (!keepCaretInComposer) {
+          clearOwnedSelection();
+        }
       }
-      if (typeof document.execCommand !== "function") {
-        return "composer-write-unconfirmed";
-      }
-      if (!document.execCommand("insertText", false, prompt)) {
-        return "composer-write-unconfirmed";
-      }
-      const postCommandFailure = checkComposerTarget(element);
-      if (postCommandFailure) {
-        return postCommandFailure;
-      }
-      const readback = getComposerText(element);
-      if (readback === null) {
-        return "structure-unsupported";
-      }
-      if (readback !== prompt) {
-        return "text-mismatch";
-      }
-      keepCaretInComposer = true;
-      return "exact";
-    } catch {
-      return "composer-write-unconfirmed";
-    } finally {
-      if (!keepCaretInComposer) {
-        clearOwnedSelection();
-      }
-    }
+    })();
   };
 
   const waitForComposerToClear = async (
@@ -831,7 +913,11 @@ export async function runChatGptAdapter(
     return prefillVisibilityFailure;
   }
 
-  const composerWriteCheck = fillComposer(composer, input.prompt);
+  const composerWriteResult = fillComposer(composer, input.prompt);
+  const composerWriteCheck =
+    composerWriteResult instanceof Promise
+      ? await composerWriteResult
+      : composerWriteResult;
   if (composerWriteCheck !== "exact") {
     const failureReason: ChatGptAdapterFailureReason =
       composerWriteCheck === "structure-unsupported"
