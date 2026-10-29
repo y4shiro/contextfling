@@ -1,6 +1,6 @@
 # Chrome 116+ 実機 smoke
 
-> Status: Chrome manual smoke complete（実機再現不能項目は自動検証で補完） / Chrome Web Store Release Gate は保留
+> Status: 2026-08-27 の Chrome manual smoke は完了（実機再現不能項目は自動検証で補完）。2026-10-06 以降の自動送信 FAIL は [Issue #24](https://github.com/y4shiro/contextfling/issues/24) で追跡し、2026-10-29 の source `7e37e6a` は Chrome 156 の単回実機 smoke で PASS。Chrome Web Store Release Gate は保留。
 >
 > Tracking: [GitHub Issue #6](https://github.com/y4shiro/contextfling/issues/6)
 
@@ -96,6 +96,115 @@ diff check               passed
 - 今回の手動代表環境は Chrome 151.0.7922.140 です。Chrome 116 以上の全バージョンで同一挙動を保証する実機証跡ではありません。
 - logged-out では自動送信せず clipboard fallback の固定 banner へ終端します。clipboard の内容は読み取らず、ユーザーが必要に応じて手動操作します。
 - Security / Privacy review、正式名称・listing・Privacy URL、Chrome Web Store の審査・公開判断は未完了です。CWS の submit / publish は行わず、Release Gate は保留のままです。
+
+## 現行 ChatGPT Web での失敗確認（2026-10-06）
+
+PR #22 の候補 ZIP を使った実機確認で、X の selection handoff が前面の新規 ChatGPT タブを開いた後、自動入力・送信に失敗しました。これは 2026-08-27 の成功証跡を取り消すものではなく、現在の画面に対する追加の失敗証跡です。
+
+- 確認日: 2026-10-06（JST）
+- Chrome: 151.0.7922.140（Human 確認）
+- Extension: 0.1.1（ツール表示確認）
+- 検証 commit: `e6f619063898dffa2648d19ad0f85c9ce093d862`
+- 候補 ZIP SHA-256: `3d4d9d04a386a31940eae95a1a107296a64f0d6e4f458105dada7e172726da05`
+- 起点: ZIP 専用展開フォルダの直下 Manifest から手動 unpacked load。Human が読み込み成功と、見える範囲で読み込みエラーなしを確認。
+- 詳細証跡: [PR #22 の再実施結果](https://github.com/y4shiro/contextfling/pull/22#issuecomment-6009791354)
+
+初回の設定 action、foreground-only の説明、exact preview、明示同意と Chrome の permission 許可は確認済みです。最初の試行の送信後結果は不明のまま保持し、Human の「今のテストやり直して」という明示指示で独立した単回試行を一回だけ再実施しました。
+
+| 観察項目 | 結果 | 確認主体と範囲 |
+| --- | --- | --- |
+| 新規 target | 一つ、前面／visible | ツール。操作前後の tab metadata と本文領域の visibility を確認。 |
+| 自動送信 | FAIL | ツール。user message 0 件、assistant message 0 件、composer 空。 |
+| banner | clipboard-copied の固定表示 | ツール。拡張所有 banner のみを読み取り。clipboard 内容や実際のコピー内容は未読。 |
+| 追加 target／retry／二重送信 | 観察なし | 作成から 5 秒以上経過後も同じ target 一つ、message 0 件、composer 空、banner 表示継続。内部の全 attempt 履歴の監査ではない。 |
+| 現行 composer | 既存 registry に一致しない | 本文領域の実入力欄は DIV、contenteditable=true、role=textbox、id 空、data-testid なし。既存 composer selector の一致候補は 0 件。 |
+
+selector 不一致は原因候補です。Service Worker の failure reason は未取得であり、timeout／logged-out などの原因をこの記録だけで確定しません。後続の調査・修正・実機再確認は Issue #24 とその修正 PR で扱います。現時点で自動送信成功を主張しません。
+
+観察は本文領域と拡張所有 banner に限定し、私的 sidebar／既存会話履歴を取得していません。実機 DOM の改変、test hook、常駐 script、追加の貼り付け・送信、自動 retry は行っていません。選択本文、prompt、会話 URL、account 情報、clipboard 内容は公開証跡に含めません。
+
+この候補 ZIP は 2026-08-24 公開 ZIP とは別の未公開 artifact です。Issue #8 の公開 ZIP 不一致は未解消で、version、Release、tag／asset、CWS に変更はありません。
+
+## Issue #24 の修正候補と静的検証（2026-10-06）
+
+現行の新規会話の実入力欄は `form[data-chatgpt-composer][data-composer-placement="home"]` 内の `div[contenteditable="true"][role="textbox"][data-composer-markdown]` でした。ID と `data-testid` はありません。別の新規タブで非機密文字を入力すると、同じ form に `button[type="submit"][aria-label="送信"]` が一つ現れ、入力消去後は消えました。調査入力は消去し、調査タブを閉じました。既存の失敗 target には追加入力・送信していません。Service Worker failure reason は引き続き未取得です。
+
+[PR #25](https://github.com/y4shiro/contextfling/pull/25) の commit `7e8ec6dc48255e101b8bcddab468f240828f6582` は、この実測形状を Destination selector registry に追加しました。現行 DOM の非機密最小 fixture は修正前に selector 未検出で FAIL、修正後に PASS。複数 composer では入力前に停止し、複数 send 候補では送信しないことも確認しました。lint、typecheck、91 tests、build、secret scan（103 tracked/staged snapshots）、diff check は PASS。Manifest、optional permission、外部通信、runtime dependency、version は変更していません。
+
+### selector 修正後の単回実機 smoke: FAIL
+
+Human が commit `c7ab4ffdb8c2566cae6bc391fe98873c7856120c` の build を `/tmp/contextfling-pr25-c7ab4ff-YbOJpX/unpacked` から手動読み込みし、非機密の selection menu を一回だけ実行したと回答しました。元の `dist/` とコピー先の全7ファイルの一致をツールで確認しました。Service Worker bundle の SHA-256 は `184ad37900c7e3d8fed7393e841a0e97a34f9f0f2d8ac699e8f41790d535c6f2`、Manifest version は `0.1.1` です。2026-10-06 14:49 JST までの本文領域の観察では、新規 target 一つ・visible、user message 0件、assistant message 0件、composer 非空、clipboard-copied banner となり、送信は FAIL でした。5秒以上経過後も追加 target／二重送信は観察されませんでした。内部の全 attempt 履歴の監査ではありません。既存の失敗 target で再送せず、今回の target でも追加の貼り付け・送信を行っていません。
+
+composer は直下の `p` 内に通常の text node と `span[data-rich-text-generated-autolink][text-link-href]` を持ちました。generated span は、直下の span wrapper 内に空の装飾アイコンと URL の text node を持ち、表示文字とリンク属性の完全一致を真偽値だけで確認しました。既存の読み戻しは `p` 直下の text node だけを許容するため、この構造を `null` として拒否します。Service Worker の実測 failure reason は未取得です。動的リンク属性の値は公開証跡へ転記せず、以降の観察を属性名・構造・真偽値へ限定しました。既存会話、account、clipboard 内容は取得していません。
+
+この build は2026-08-24 公開 ZIP と PR #22 候補 ZIP のどちらにも反映していません。generated autolink の読み戻しへの対応と、その修正後の実機確認は継続中です。
+
+### generated autolink 読み戻しの修正と静的検証
+
+adapter は実測した marker span、単一 wrapper、空の hidden/noneditable icon、単一 text node の形だけを復元します。icon の子要素は span／svg／path に限定し、表示 text node とリンク属性が完全一致する場合だけ本文を連結します。汎用の `textContent` 平坦化は追加せず、全文と送信予定の prompt の完全一致、未知構造の拒否、送信前の再確認を維持します。リンクへアクセスしません。
+
+合成値の fixture で、同期／microtask の変換は修正前 FAIL、修正後 PASS。marker 欠落、リンク属性の不一致、editable／未知／非空 icon では送信せず、送信後も装飾済み composer が残る場合は一回の click 後に send-unknown となることを確認しました。親の直接 review 後、実測に合わせた fixture の label／装飾形状と editable icon の拒否を補い、95 tests、lint、typecheck、build、diff check が通過しました。修正 build の実機確認は未完了です。
+
+## PR #25 修正後 build の単回実機 smoke（2026-10-29）
+
+結果は FAIL です。Human が Chrome `156.0.8078.48` で `/tmp/contextfling-pr25-6d41bfa-20261029/unpacked` の読み込み完了を回答し、非機密の X selection menu を一回実行しました。検証 source commit は `6d41bfa6f7a511ac6bb459fab8715df1dcfeb2cf`、Manifest version は `0.1.1` です。現 HEAD の source から再生成した build と読み込み用フォルダの全7ファイルが一致し、Service Worker bundle SHA-256 は `fa67f3641e304ef0a15464fbc0d171055d2bcf90fac4a01ba89d1e92c648511b` でした。
+
+ツールは操作前の tab ID と比較し、新規 ChatGPT target が一つであることを確認しました。その target の本文領域では user message 0件、assistant message 0件でした。composer は非空で、拡張所有の clipboard-copied banner が表示されました。初回の空判定は、観察側が contenteditable にも value を優先した誤りであり、入力が空になった根拠として扱いません。5秒以上経過後も新規 target は一つ、user message 0件でした。追加の貼り付け・送信・再実行は行っていません。追加 target／二重送信は観察されませんでしたが、内部の全 attempt 履歴を監査したものではありません。
+
+残留 composer は現 registry の home selector に一致し、関連 form 内には enabled／visible な日本語 submit control が一つありました。generated autolink は既存修正の marker、単一 wrapper、空の hidden/noneditable icon と単一 text node の形状に一致しました。属性名・構造・真偽値だけを取得し、実入力、リンク値、会話URL、私的 sidebar、account、clipboard 内容、Cookie、token、auth state は取得・公開していません。
+
+Human は Service Worker の診断ログが残っていないことを確認しました。観察時の DOM が一致していても実行時の全文一致や readiness は証明できないため、failure reason は未確定です。入力直後／送信直前のそれぞれで、読み戻せない構造と全文の文字不一致を固定 enum で区別する診断を追加しました。write 例外は従来の composer-write-unconfirmed とし、本文・URL・長さなどの値を診断に含めません。96 tests、lint、typecheck、build、secret scan、diff check を確認し、その変更後の build で独立した単回確認を行う準備を進めます。実機成功は引き続き未確認です。
+
+## 診断 build の単回実機 smoke（2026-10-29）
+
+source `a69b9e12f0c244e4cfde93c06c6f0c695e0dfc95` の診断 build に同じ読み込みフォルダを更新し、全7ファイルの一致を確認しました。Service Worker bundle SHA-256 は `5356f87cb2fc3392086b5b64c0a14d873d301ef7f6defb16a267bd8f0b240722`、version は `0.1.1`、Chrome は Human 確認の `156.0.8078.48` です。再読み込みと Console を開いてから別の新規会話へ一回だけ実行する手順に対し、Human が実行済みと回答しました。
+
+結果は FAIL でした。ツールは前回 target を除外した新規 target 一つ、本文領域の user/assistant message 各0件、clipboard-copied banner を確認しました。初回の composer 空判定は観察側が DIV にも value を優先した誤りであり、tagName に応じて textarea/input は value、contenteditable は textContent で判定し直した結果、composer は非空でした。5秒以上経過後も user message 0件、新規 target 一つでした。追加の貼り付け・送信・再実行は行っていません。
+
+Human が今回の Service Worker 診断の `failureReason=composer-presend-text-mismatch` を確認しました。入力直後の全文一致後、送信直前の読み戻しが不一致となったことを示し、送信操作前に停止する経路です。composer の文字残留は確認しましたが、内部 state や具体的な文字不一致の原因までは確定しません。plain text を一回だけブラウザーの編集操作で入れる候補とリスクを [Draft ADR 0004](../adr/0004-single-native-composer-edit.md) に記録し、復旧は未確認として継続します。
+
+### 単回ブラウザー編集候補の検証
+
+contenteditable 経路は、既知の空欄だけに実際の focus と対象内の collapsed Range/Selection を設定し、`execCommand("insertText", false, prompt)` を一回だけ呼びます。focus 後／実行直前に可視性・一意性・attachment・active element・selection の範囲と空欄を再確認します。API 不在、false、例外、不一致では送信せず、直接 DOM 代入を二つ目の入力方法として使いません。textarea/input の経路は変更していません。
+
+JSDOM の編集模型を使い、単回 command/input、既存入力の保持、API 不在／false／例外、focus 失敗／置換／hidden／複数候補、対象外の selection と失敗時の後始末、既存の段落／autolink／送信安全条件を検証しました。100 tests、lint、typecheck、build、secret scan、diff check は PASS です。
+
+親は隔離したローカル Chromium の一行 prompt と制御された editor fixture でも adapter 全体を実行し、native input 1回、synthetic input 0回、click 1回、status=sent、composer 空を確認しました。直接 DOM 代入の synthetic input を戻す編集模型との比較では、ブラウザー編集の入力だけが保持されました。この fixture は ChatGPT の内部 state を再現・証明するものではありません。複数行の native DOM 形状は editor と browser に依存するため、既知の段落／autolink の厳密な読み戻しを維持し、実機成功は未確認です。
+
+## 単回ブラウザー編集 build の実機診断（2026-10-29）
+
+source `02701d70123438326926e46e481da87266045dc6`、version `0.1.1` の build を同じ読み込みフォルダへ反映し、全7ファイルの一致を確認しました。Service Worker bundle SHA-256 は `1e16c00a0f7e85de153f492990a29bd186cf5375abf15d3c354f18a0adbf7055` です。Chrome 再読み込み後、別の新規会話へ一回だけ実行する手順に対し、Human が実行済みと回答しました。
+
+結果は FAIL でした。ツールは新規 target 一つ、user/assistant message 各0件、composer 非空、clipboard-copied banner を確認しました。5秒以上経過後も新規 target は一つでした。空判定には textarea/input の value と contenteditable の textContent を要素の種類で使い分けました。追加の入力・送信・再実行はしていません。
+
+Human が今回の `failureReason=composer-input-structure-unsupported` を確認しました。操作せずに後から観察した同じ入力欄は、厳密な p／空段落／generated autolink の構造条件に一致していました。これは編集直後の整形が読み戻しより遅い可能性と整合しますが、実際のページ内部処理や文字不一致の内容を取得したものではありません。
+
+親の隔離 Chromium の非機密複数行 fixture でも、native insertText が空段落 marker を複製し、input handler が次の microtask で marker を整えるケースを作ると、同じエラーを再現しました。command 1回、click 0回、attempted=false でした。ChatGPT 内部の再現証明ではありません。入力の追加や parser の許容拡大をせず、短い期限内に同じ対象の厳密な全文一致を観察する候補を検証します。
+
+### 整形完了の観察候補と検証
+
+contenteditable の単回ブラウザー編集後、同じ対象の読み戻しが送信予定の全文と厳密に一致するまで最大 `min(timeoutMs, 1,000ms)` 観察するようにしました。未知構造や文字不一致が期限まで続けば、診断を保持して送信せず終端します。待機中の hidden／detach／複数候補では停止し、observer・visibility listener・timer を解除します。textarea/input の同期経路、既知の段落／autolink parser、送信直前の再確認は維持し、入力や送信は追加しません。
+
+102 tests、lint、typecheck、build、secret scan、diff check は PASS です。非空の p に一時的な empty marker が残る fixture を microtask／次の task で正規化し、一回の編集だけで全文一致と送信が成立することを検証しました。永続的な不正構造／不一致と、待機中の hidden／detach／複数候補では送信しません。
+
+親は同じ隔離 Chromium の複数行 fixture を修正前後で確認しました。修正前は command 1回、click 0回、composer-input-structure-unsupported。修正後は command 1回、click 1回、status=sent、composer 空でした。native input event は複数行のブラウザー処理により6回で、編集コマンドの再実行ではありません。ChatGPT 実機成功は引き続き未確認です。
+
+## 整形観察 build の単回実機 smoke: PASS（2026-10-29）
+
+- 記録日時: 2026-10-29 18:13 JST
+- Chrome: `156.0.8078.48`（Human 確認）
+- Extension: `0.1.1`
+- Runtime source commit: `7e37e6a6fd14c3709634e0f3ec205e0252459415`
+- 読み込み folder: `/tmp/contextfling-pr25-6d41bfa-20261029/unpacked`（folder 名の略記は初回 build のまま。全7ファイルを現 source の build と照合）
+- Service Worker bundle SHA-256: `85ca90886d2bbfa0b5de081348900abe5fc74adcf5e6743c21964526aadb8f9a`
+- 操作・確認主体: Human が拡張再読み込み後の一回の実行と自動送信成功を回答。親 Codex が今回の新規 target を前後の tab ID で特定し、本文領域の固定属性・真偽値だけで確認。
+- 証跡: [PR #25 PASS 記録](https://github.com/y4shiro/contextfling/pull/25#issuecomment-6492698116)
+
+ツールの最初の従来方式では `[data-message-author-role]` が0件でしたが、これは現行 DOM にその識別属性がないためであり、未送信の根拠にはしません。本文を読まずに現在の構造を確認し、`main` 内の `[data-user-message-bubble]` が一つで可視、`[data-thread-user-message-navigation-content]` も一つであることを確認しました。composer は一つで空、固定 banner はありませんでした。5秒以上経過後も新規 ChatGPT target は一つでした。追加入力・追加送信・自動再実行は行っておらず、追加 target／二重送信は観察されませんでした。内部の全 attempt 履歴を監査したものではありません。
+
+それ以前の FAIL 記録にある旧 message-role の0件という数だけでは、現行 DOM のメッセージ数を証明できません。中間 build の失敗は固定 failureReason が示す送信前の停止、固定 banner、Human の確認と合わせて扱います。失敗した target へは再送していません。
+
+実入力、会話URL、私的 sidebar、account、clipboard 内容、Cookie、token、auth state は取得・公開していません。過去の FAIL は保持し、今回の限定した実機成功で上書きしません。公開 ZIP への反映、version 変更、Release、CWS 操作はしていません。
 
 ## 記録フォーマット
 

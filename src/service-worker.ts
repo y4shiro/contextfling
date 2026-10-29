@@ -421,6 +421,10 @@ function isAdapterFailureReason(
     value === "composer-ambiguous" ||
     value === "composer-detached" ||
     value === "composer-write-unconfirmed" ||
+    value === "composer-input-structure-unsupported" ||
+    value === "composer-input-text-mismatch" ||
+    value === "composer-presend-structure-unsupported" ||
+    value === "composer-presend-text-mismatch" ||
     value === "container-not-found" ||
     value === "send-not-found" ||
     value === "send-ambiguous" ||

@@ -30,6 +30,10 @@ export type ChatGptAdapterFailureReason =
   | "composer-ambiguous"
   | "composer-detached"
   | "composer-write-unconfirmed"
+  | "composer-input-structure-unsupported"
+  | "composer-input-text-mismatch"
+  | "composer-presend-structure-unsupported"
+  | "composer-presend-text-mismatch"
   | "container-not-found"
   | "send-not-found"
   | "send-ambiguous"
@@ -282,6 +286,36 @@ export async function runChatGptAdapter(
     return candidates.values().next().value ?? null;
   };
 
+  const checkComposerTarget = (
+    element: Element,
+  ): ChatGptAdapterFailureReason | null => {
+    const visibilityFailure = checkDocumentVisibility("composer");
+    if (visibilityFailure) {
+      return visibilityFailure.diagnostics.failureReason;
+    }
+    if (!document.contains(element)) {
+      diagnosticsState.attachment.composer = "detached";
+      return "composer-detached";
+    }
+    const candidates = collectVisible(
+      document,
+      input.selectors.composer,
+      false,
+    );
+    diagnosticsState.composerCandidateCount = candidates.length;
+    if (candidates.length === 0) {
+      return "composer-not-found";
+    }
+    if (candidates.length > 1) {
+      return "composer-ambiguous";
+    }
+    if (candidates[0] !== element) {
+      return "composer-detached";
+    }
+    diagnosticsState.attachment.composer = "attached";
+    return null;
+  };
+
   const hasVisibleLoginMarker = (): boolean => {
     for (const selector of input.selectors.loginMarker) {
       let candidates: NodeListOf<Element>;
@@ -381,6 +415,56 @@ export async function runChatGptAdapter(
     });
   };
 
+  // ChatGPT decorates URLs with an inline link and an empty icon. Validate
+  // that observed shape before including its visible text in exact readback.
+  const getGeneratedAutolinkText = (element: Element): string | null => {
+    if (
+      element.localName !== "span" ||
+      !element.hasAttribute("data-rich-text-generated-autolink")
+    ) {
+      return null;
+    }
+    const outerChildren = Array.from(element.childNodes);
+    if (outerChildren.length !== 1 || outerChildren[0]?.nodeType !== 1) {
+      return null;
+    }
+    const wrapper = outerChildren[0] as Element;
+    if (wrapper.localName !== "span") {
+      return null;
+    }
+    const wrapperChildren = Array.from(wrapper.childNodes);
+    const iconNode = wrapperChildren[0];
+    const linkTextNode = wrapperChildren[1];
+    if (
+      wrapperChildren.length !== 2 ||
+      iconNode?.nodeType !== 1 ||
+      linkTextNode?.nodeType !== 3
+    ) {
+      return null;
+    }
+    const icon = iconNode as Element;
+    if (
+      icon.localName !== "span" ||
+      !icon.hasAttribute("data-inline-url-icon") ||
+      icon.getAttribute("aria-hidden") !== "true" ||
+      icon.getAttribute("contenteditable") !== "false" ||
+      icon.textContent !== ""
+    ) {
+      return null;
+    }
+    const decorativeTags = new Set(["span", "svg", "path"]);
+    for (const descendant of icon.querySelectorAll("*")) {
+      if (!decorativeTags.has(descendant.localName)) {
+        return null;
+      }
+    }
+    const linkText = linkTextNode.nodeValue ?? "";
+    return linkText.length > 0 &&
+      element.getAttribute("text-link-href") === linkText
+      ? linkText
+      : null;
+  };
+
   const getContentEditableText = (element: HTMLElement): string | null => {
     const childNodes = Array.from(element.childNodes);
     if (childNodes.length === 0) {
@@ -426,10 +510,18 @@ export async function runChatGptAdapter(
       }
       let line = "";
       for (const child of children) {
-        if (child.nodeType !== 3) {
+        if (child.nodeType === 3) {
+          line += child.nodeValue ?? "";
+          continue;
+        }
+        if (child.nodeType !== 1) {
           return null;
         }
-        line += child.nodeValue ?? "";
+        const linkText = getGeneratedAutolinkText(child as Element);
+        if (linkText === null) {
+          return null;
+        }
+        line += linkText;
       }
       lines.push(line);
     }
@@ -452,14 +544,106 @@ export async function runChatGptAdapter(
     return null;
   };
 
-  const fillComposer = (element: Element, prompt: string): boolean => {
-    try {
-      element.scrollIntoView({ block: "center", inline: "nearest" });
-      element.dispatchEvent(new FocusEvent("focus", { bubbles: false }));
-      if (
-        element instanceof HTMLTextAreaElement ||
-        element instanceof HTMLInputElement
-      ) {
+  type ComposerReadbackResult =
+    | "exact"
+    | "structure-unsupported"
+    | "text-mismatch"
+    | ChatGptAdapterFailureReason;
+
+  const waitForComposerReadback = async (
+    element: Element,
+    prompt: string,
+    deadlineMs: number,
+  ): Promise<ComposerReadbackResult> => {
+    const inspect = (): ComposerReadbackResult => {
+      const targetFailure = checkComposerTarget(element);
+      if (targetFailure) {
+        return targetFailure;
+      }
+      try {
+        const text = getComposerText(element);
+        return text === prompt
+          ? "exact"
+          : text === null
+            ? "structure-unsupported"
+            : "text-mismatch";
+      } catch {
+        return "composer-write-unconfirmed";
+      }
+    };
+    const initial = inspect();
+    if (initial !== "structure-unsupported" && initial !== "text-mismatch") {
+      return initial;
+    }
+    if (typeof MutationObserver !== "function") {
+      return inspect();
+    }
+
+    const root = document.documentElement ?? document.body;
+    if (!root) {
+      return "composer-write-unconfirmed";
+    }
+    return new Promise((resolve) => {
+      let observer: MutationObserver | null = null;
+      let timer: ReturnType<typeof globalThis.setTimeout> | undefined;
+      let settled = false;
+      const finish = (value: ComposerReadbackResult): void => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        observer?.disconnect();
+        if (timer !== undefined) {
+          globalThis.clearTimeout(timer);
+        }
+        document.removeEventListener("visibilitychange", onVisibilityChange);
+        resolve(value);
+      };
+      const inspectPending = (): void => {
+        const checked = inspect();
+        if (
+          checked !== "structure-unsupported" &&
+          checked !== "text-mismatch"
+        ) {
+          finish(checked);
+        }
+      };
+      const onVisibilityChange = (): void => inspectPending();
+      try {
+        observer = new MutationObserver(inspectPending);
+        observer.observe(root, {
+          subtree: true,
+          childList: true,
+          characterData: true,
+          attributes: true,
+        });
+        document.addEventListener("visibilitychange", onVisibilityChange);
+        timer = globalThis.setTimeout(() => finish(inspect()), deadlineMs);
+        // Observe first, then read again so an intervening mutation cannot be missed.
+        inspectPending();
+      } catch {
+        finish(inspect());
+      }
+    });
+  };
+
+  const fillComposer = (
+    element: Element,
+    prompt: string,
+  ): ComposerReadbackResult | Promise<ComposerReadbackResult> => {
+    const isContentEditable =
+      element instanceof HTMLElement &&
+      element.getAttribute("contenteditable") === "true";
+    if (!isContentEditable) {
+      try {
+        element.scrollIntoView({ block: "center", inline: "nearest" });
+        element.dispatchEvent(new FocusEvent("focus", { bubbles: false }));
+        if (
+          !(element instanceof HTMLTextAreaElement) &&
+          !(element instanceof HTMLInputElement)
+        ) {
+          return "composer-write-unconfirmed";
+        }
         const prototype = Object.getPrototypeOf(element) as object;
         const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
         if (descriptor?.set) {
@@ -476,27 +660,139 @@ export async function runChatGptAdapter(
           }),
         );
         element.dispatchEvent(new Event("change", { bubbles: true }));
-      } else if (
-        element instanceof HTMLElement &&
-        element.getAttribute("contenteditable") === "true"
-      ) {
-        element.textContent = prompt;
-        element.dispatchEvent(
-          new InputEvent("input", {
-            bubbles: true,
-            composed: true,
-            inputType: "insertText",
-            data: prompt,
-          }),
-        );
-        element.dispatchEvent(new Event("change", { bubbles: true }));
-      } else {
-        return false;
+        const readback = getComposerText(element);
+        return readback === prompt
+          ? "exact"
+          : readback === null
+            ? "structure-unsupported"
+            : "text-mismatch";
+      } catch {
+        return "composer-write-unconfirmed";
       }
-      return getComposerText(element) === prompt;
-    } catch {
-      return false;
     }
+    if (getComposerText(element) !== "") {
+      return "composer-write-unconfirmed";
+    }
+
+    let selection: Selection | null = null;
+    let selectionOwnedByComposer = false;
+    let keepCaretInComposer = false;
+    const clearOwnedSelection = (): void => {
+      if (
+        !selectionOwnedByComposer ||
+        !selection ||
+        selection.rangeCount === 0
+      ) {
+        return;
+      }
+      for (let index = 0; index < selection.rangeCount; index += 1) {
+        const range = selection.getRangeAt(index);
+        if (
+          !element.contains(range.startContainer) ||
+          !element.contains(range.endContainer)
+        ) {
+          return;
+        }
+      }
+      selection.removeAllRanges();
+    };
+    return (async (): Promise<ComposerReadbackResult> => {
+      try {
+        element.scrollIntoView({ block: "center", inline: "nearest" });
+        selection = document.getSelection();
+        if (!selection) {
+          return "composer-write-unconfirmed";
+        }
+        for (let index = 0; index < selection.rangeCount; index += 1) {
+          const range = selection.getRangeAt(index);
+          if (
+            !element.contains(range.startContainer) ||
+            !element.contains(range.endContainer)
+          ) {
+            return "composer-write-unconfirmed";
+          }
+        }
+        element.focus();
+        const focusFailure = checkComposerTarget(element);
+        if (focusFailure) {
+          return focusFailure;
+        }
+        if (document.activeElement !== element) {
+          return "composer-write-unconfirmed";
+        }
+        if (getComposerText(element) !== "") {
+          return "composer-write-unconfirmed";
+        }
+        for (let index = 0; index < selection.rangeCount; index += 1) {
+          const range = selection.getRangeAt(index);
+          if (
+            !element.contains(range.startContainer) ||
+            !element.contains(range.endContainer)
+          ) {
+            return "composer-write-unconfirmed";
+          }
+        }
+
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        range.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        selectionOwnedByComposer = true;
+        const selectionIsContained = (): boolean => {
+          if (selection?.rangeCount !== 1 || !selection.isCollapsed) {
+            return false;
+          }
+          const activeRange = selection.getRangeAt(0);
+          return (
+            activeRange.collapsed &&
+            element.contains(activeRange.startContainer) &&
+            element.contains(activeRange.endContainer) &&
+            selection.anchorNode !== null &&
+            element.contains(selection.anchorNode) &&
+            selection.focusNode !== null &&
+            element.contains(selection.focusNode)
+          );
+        };
+        const targetFailure = checkComposerTarget(element);
+        if (
+          targetFailure ||
+          document.activeElement !== element ||
+          !selectionIsContained()
+        ) {
+          return targetFailure ?? "composer-write-unconfirmed";
+        }
+        if (getComposerText(element) !== "") {
+          return "composer-write-unconfirmed";
+        }
+        if (typeof document.execCommand !== "function") {
+          return "composer-write-unconfirmed";
+        }
+        if (!document.execCommand("insertText", false, prompt)) {
+          return "composer-write-unconfirmed";
+        }
+        const postCommandFailure = checkComposerTarget(element);
+        if (postCommandFailure) {
+          return postCommandFailure;
+        }
+        const readback = await waitForComposerReadback(
+          element,
+          prompt,
+          Math.min(timeoutMs, 1_000),
+        );
+        if (readback !== "exact") {
+          return readback;
+        }
+        keepCaretInComposer = true;
+        return "exact";
+      } catch {
+        return "composer-write-unconfirmed";
+      } finally {
+        if (!keepCaretInComposer) {
+          clearOwnedSelection();
+        }
+      }
+    })();
   };
 
   const waitForComposerToClear = async (
@@ -617,13 +913,24 @@ export async function runChatGptAdapter(
     return prefillVisibilityFailure;
   }
 
-  if (!fillComposer(composer, input.prompt)) {
+  const composerWriteResult = fillComposer(composer, input.prompt);
+  const composerWriteCheck =
+    composerWriteResult instanceof Promise
+      ? await composerWriteResult
+      : composerWriteResult;
+  if (composerWriteCheck !== "exact") {
+    const failureReason: ChatGptAdapterFailureReason =
+      composerWriteCheck === "structure-unsupported"
+        ? "composer-input-structure-unsupported"
+        : composerWriteCheck === "text-mismatch"
+          ? "composer-input-text-mismatch"
+          : composerWriteCheck;
     return result(
       "selector-mismatch",
       "composer",
       false,
       "入力欄への標準 DOM event による入力に失敗しました。",
-      "composer-write-unconfirmed",
+      failureReason,
     );
   }
 
@@ -734,13 +1041,16 @@ export async function runChatGptAdapter(
       "composer-detached",
     );
   }
-  if (getComposerText(composer) !== input.prompt) {
+  const composerReadback = getComposerText(composer);
+  if (composerReadback !== input.prompt) {
     return result(
       "selector-mismatch",
       "composer",
       false,
       "送信直前に入力欄の状態を確認できませんでした。",
-      "composer-write-unconfirmed",
+      composerReadback === null
+        ? "composer-presend-structure-unsupported"
+        : "composer-presend-text-mismatch",
     );
   }
 

@@ -14,6 +14,7 @@ export interface ChatGptSelectorRegistry {
 export const CHATGPT_SELECTOR_REGISTRY: ChatGptSelectorRegistry = Object.freeze(
   {
     composer: Object.freeze([
+      'form[data-chatgpt-composer][data-composer-placement="home"] [contenteditable="true"][role="textbox"][data-composer-markdown]',
       "#prompt-textarea",
       'textarea[data-testid="textbox"]',
       'textarea[name="prompt-textarea"]',
@@ -21,6 +22,7 @@ export const CHATGPT_SELECTOR_REGISTRY: ChatGptSelectorRegistry = Object.freeze(
       '[contenteditable="true"][data-testid="textbox"]',
     ]),
     sendButton: Object.freeze([
+      'button[type="submit"][aria-label="送信"]',
       'button[data-testid="send-button"]',
       'button[aria-label="Send prompt"]',
       'button[aria-label="Send message"]',
