@@ -12,6 +12,10 @@ Architecture Decision Record（ADR）は、変更コストが高く、複数の�
 
 ## 状態
 
+### Draft
+
+- [0004: contenteditable composer への単回ブラウザー編集](0004-single-native-composer-edit.md) — 入力保持失敗を受けた候補。実際の focus/selection と単回 insertText を使い、厳密な全文一致と失敗時の停止を維持。実機復旧は未確認。
+
 ### Accepted（Experimental）
 
 - [0001: 実験的 ChatGPT Web handoff](0001-experimental-chatgpt-web-handoff.md) — v0.1 の限定 scope、初回 preview/明示同意、optional host/offscreen/clipboardWrite、毎回新規会話、retry 禁止、session cleanup を採用。実装成功・公式連携・Web Store 公開を意味しない。

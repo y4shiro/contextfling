@@ -149,11 +149,27 @@ adapter は実測した marker span、単一 wrapper、空の hidden/noneditable
 
 結果は FAIL です。Human が Chrome `156.0.8078.48` で `/tmp/contextfling-pr25-6d41bfa-20261029/unpacked` の読み込み完了を回答し、非機密の X selection menu を一回実行しました。検証 source commit は `6d41bfa6f7a511ac6bb459fab8715df1dcfeb2cf`、Manifest version は `0.1.1` です。現 HEAD の source から再生成した build と読み込み用フォルダの全7ファイルが一致し、Service Worker bundle SHA-256 は `fa67f3641e304ef0a15464fbc0d171055d2bcf90fac4a01ba89d1e92c648511b` でした。
 
-ツールは操作前の tab ID と比較し、新規 ChatGPT target が一つであることを確認しました。その target の本文領域では user message 0件、assistant message 0件でした。最初の観察で composer は空、その後の観察では非空となり、拡張所有の clipboard-copied banner が表示されました。5秒以上経過後も新規 target は一つ、user message 0件でした。追加の貼り付け・送信・再実行は行っていません。追加 target／二重送信は観察されませんでしたが、内部の全 attempt 履歴を監査したものではありません。
+ツールは操作前の tab ID と比較し、新規 ChatGPT target が一つであることを確認しました。その target の本文領域では user message 0件、assistant message 0件でした。composer は非空で、拡張所有の clipboard-copied banner が表示されました。初回の空判定は、観察側が contenteditable にも value を優先した誤りであり、入力が空になった根拠として扱いません。5秒以上経過後も新規 target は一つ、user message 0件でした。追加の貼り付け・送信・再実行は行っていません。追加 target／二重送信は観察されませんでしたが、内部の全 attempt 履歴を監査したものではありません。
 
 残留 composer は現 registry の home selector に一致し、関連 form 内には enabled／visible な日本語 submit control が一つありました。generated autolink は既存修正の marker、単一 wrapper、空の hidden/noneditable icon と単一 text node の形状に一致しました。属性名・構造・真偽値だけを取得し、実入力、リンク値、会話URL、私的 sidebar、account、clipboard 内容、Cookie、token、auth state は取得・公開していません。
 
 Human は Service Worker の診断ログが残っていないことを確認しました。観察時の DOM が一致していても実行時の全文一致や readiness は証明できないため、failure reason は未確定です。入力直後／送信直前のそれぞれで、読み戻せない構造と全文の文字不一致を固定 enum で区別する診断を追加しました。write 例外は従来の composer-write-unconfirmed とし、本文・URL・長さなどの値を診断に含めません。96 tests、lint、typecheck、build、secret scan、diff check を確認し、その変更後の build で独立した単回確認を行う準備を進めます。実機成功は引き続き未確認です。
+
+## 診断 build の単回実機 smoke（2026-10-29）
+
+source `a69b9e12f0c244e4cfde93c06c6f0c695e0dfc95` の診断 build に同じ読み込みフォルダを更新し、全7ファイルの一致を確認しました。Service Worker bundle SHA-256 は `5356f87cb2fc3392086b5b64c0a14d873d301ef7f6defb16a267bd8f0b240722`、version は `0.1.1`、Chrome は Human 確認の `156.0.8078.48` です。再読み込みと Console を開いてから別の新規会話へ一回だけ実行する手順に対し、Human が実行済みと回答しました。
+
+結果は FAIL でした。ツールは前回 target を除外した新規 target 一つ、本文領域の user/assistant message 各0件、clipboard-copied banner を確認しました。初回の composer 空判定は観察側が DIV にも value を優先した誤りであり、tagName に応じて textarea/input は value、contenteditable は textContent で判定し直した結果、composer は非空でした。5秒以上経過後も user message 0件、新規 target 一つでした。追加の貼り付け・送信・再実行は行っていません。
+
+Human が今回の Service Worker 診断の `failureReason=composer-presend-text-mismatch` を確認しました。入力直後の全文一致後、送信直前の読み戻しが不一致となったことを示し、送信操作前に停止する経路です。composer の文字残留は確認しましたが、内部 state や具体的な文字不一致の原因までは確定しません。plain text を一回だけブラウザーの編集操作で入れる候補とリスクを [Draft ADR 0004](../adr/0004-single-native-composer-edit.md) に記録し、復旧は未確認として継続します。
+
+### 単回ブラウザー編集候補の検証
+
+contenteditable 経路は、既知の空欄だけに実際の focus と対象内の collapsed Range/Selection を設定し、`execCommand("insertText", false, prompt)` を一回だけ呼びます。focus 後／実行直前に可視性・一意性・attachment・active element・selection の範囲と空欄を再確認します。API 不在、false、例外、不一致では送信せず、直接 DOM 代入を二つ目の入力方法として使いません。textarea/input の経路は変更していません。
+
+JSDOM の編集模型を使い、単回 command/input、既存入力の保持、API 不在／false／例外、focus 失敗／置換／hidden／複数候補、対象外の selection と失敗時の後始末、既存の段落／autolink／送信安全条件を検証しました。100 tests、lint、typecheck、build、secret scan、diff check は PASS です。
+
+親は隔離したローカル Chromium の一行 prompt と制御された editor fixture でも adapter 全体を実行し、native input 1回、synthetic input 0回、click 1回、status=sent、composer 空を確認しました。直接 DOM 代入の synthetic input を戻す編集模型との比較では、ブラウザー編集の入力だけが保持されました。この fixture は ChatGPT の内部 state を再現・証明するものではありません。複数行の native DOM 形状は editor と browser に依存するため、既知の段落／autolink の厳密な読み戻しを維持し、実機成功は未確認です。
 
 ## 記録フォーマット
 

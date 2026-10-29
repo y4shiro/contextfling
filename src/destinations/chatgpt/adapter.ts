@@ -286,6 +286,36 @@ export async function runChatGptAdapter(
     return candidates.values().next().value ?? null;
   };
 
+  const checkComposerTarget = (
+    element: Element,
+  ): ChatGptAdapterFailureReason | null => {
+    const visibilityFailure = checkDocumentVisibility("composer");
+    if (visibilityFailure) {
+      return visibilityFailure.diagnostics.failureReason;
+    }
+    if (!document.contains(element)) {
+      diagnosticsState.attachment.composer = "detached";
+      return "composer-detached";
+    }
+    const candidates = collectVisible(
+      document,
+      input.selectors.composer,
+      false,
+    );
+    diagnosticsState.composerCandidateCount = candidates.length;
+    if (candidates.length === 0) {
+      return "composer-not-found";
+    }
+    if (candidates.length > 1) {
+      return "composer-ambiguous";
+    }
+    if (candidates[0] !== element) {
+      return "composer-detached";
+    }
+    diagnosticsState.attachment.composer = "attached";
+    return null;
+  };
+
   const hasVisibleLoginMarker = (): boolean => {
     for (const selector of input.selectors.loginMarker) {
       let candidates: NodeListOf<Element>;
@@ -517,14 +547,24 @@ export async function runChatGptAdapter(
   const fillComposer = (
     element: Element,
     prompt: string,
-  ): "exact" | "structure-unsupported" | "text-mismatch" | "write-failed" => {
-    try {
-      element.scrollIntoView({ block: "center", inline: "nearest" });
-      element.dispatchEvent(new FocusEvent("focus", { bubbles: false }));
-      if (
-        element instanceof HTMLTextAreaElement ||
-        element instanceof HTMLInputElement
-      ) {
+  ):
+    | "exact"
+    | "structure-unsupported"
+    | "text-mismatch"
+    | ChatGptAdapterFailureReason => {
+    const isContentEditable =
+      element instanceof HTMLElement &&
+      element.getAttribute("contenteditable") === "true";
+    if (!isContentEditable) {
+      try {
+        element.scrollIntoView({ block: "center", inline: "nearest" });
+        element.dispatchEvent(new FocusEvent("focus", { bubbles: false }));
+        if (
+          !(element instanceof HTMLTextAreaElement) &&
+          !(element instanceof HTMLInputElement)
+        ) {
+          return "composer-write-unconfirmed";
+        }
         const prototype = Object.getPrototypeOf(element) as object;
         const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
         if (descriptor?.set) {
@@ -541,30 +581,135 @@ export async function runChatGptAdapter(
           }),
         );
         element.dispatchEvent(new Event("change", { bubbles: true }));
-      } else if (
-        element instanceof HTMLElement &&
-        element.getAttribute("contenteditable") === "true"
+        const readback = getComposerText(element);
+        return readback === prompt
+          ? "exact"
+          : readback === null
+            ? "structure-unsupported"
+            : "text-mismatch";
+      } catch {
+        return "composer-write-unconfirmed";
+      }
+    }
+    if (getComposerText(element) !== "") {
+      return "composer-write-unconfirmed";
+    }
+
+    let selection: Selection | null = null;
+    let selectionOwnedByComposer = false;
+    let keepCaretInComposer = false;
+    const clearOwnedSelection = (): void => {
+      if (
+        !selectionOwnedByComposer ||
+        !selection ||
+        selection.rangeCount === 0
       ) {
-        element.textContent = prompt;
-        element.dispatchEvent(
-          new InputEvent("input", {
-            bubbles: true,
-            composed: true,
-            inputType: "insertText",
-            data: prompt,
-          }),
+        return;
+      }
+      for (let index = 0; index < selection.rangeCount; index += 1) {
+        const range = selection.getRangeAt(index);
+        if (
+          !element.contains(range.startContainer) ||
+          !element.contains(range.endContainer)
+        ) {
+          return;
+        }
+      }
+      selection.removeAllRanges();
+    };
+    try {
+      element.scrollIntoView({ block: "center", inline: "nearest" });
+      selection = document.getSelection();
+      if (!selection) {
+        return "composer-write-unconfirmed";
+      }
+      for (let index = 0; index < selection.rangeCount; index += 1) {
+        const range = selection.getRangeAt(index);
+        if (
+          !element.contains(range.startContainer) ||
+          !element.contains(range.endContainer)
+        ) {
+          return "composer-write-unconfirmed";
+        }
+      }
+      element.focus();
+      const focusFailure = checkComposerTarget(element);
+      if (focusFailure) {
+        return focusFailure;
+      }
+      if (document.activeElement !== element) {
+        return "composer-write-unconfirmed";
+      }
+      if (getComposerText(element) !== "") {
+        return "composer-write-unconfirmed";
+      }
+      for (let index = 0; index < selection.rangeCount; index += 1) {
+        const range = selection.getRangeAt(index);
+        if (
+          !element.contains(range.startContainer) ||
+          !element.contains(range.endContainer)
+        ) {
+          return "composer-write-unconfirmed";
+        }
+      }
+
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      range.collapse(false);
+      selection.removeAllRanges();
+      selection.addRange(range);
+      selectionOwnedByComposer = true;
+      const selectionIsContained = (): boolean => {
+        if (selection?.rangeCount !== 1 || !selection.isCollapsed) {
+          return false;
+        }
+        const activeRange = selection.getRangeAt(0);
+        return (
+          activeRange.collapsed &&
+          element.contains(activeRange.startContainer) &&
+          element.contains(activeRange.endContainer) &&
+          selection.anchorNode !== null &&
+          element.contains(selection.anchorNode) &&
+          selection.focusNode !== null &&
+          element.contains(selection.focusNode)
         );
-        element.dispatchEvent(new Event("change", { bubbles: true }));
-      } else {
-        return "write-failed";
+      };
+      const targetFailure = checkComposerTarget(element);
+      if (
+        targetFailure ||
+        document.activeElement !== element ||
+        !selectionIsContained()
+      ) {
+        return targetFailure ?? "composer-write-unconfirmed";
+      }
+      if (getComposerText(element) !== "") {
+        return "composer-write-unconfirmed";
+      }
+      if (typeof document.execCommand !== "function") {
+        return "composer-write-unconfirmed";
+      }
+      if (!document.execCommand("insertText", false, prompt)) {
+        return "composer-write-unconfirmed";
+      }
+      const postCommandFailure = checkComposerTarget(element);
+      if (postCommandFailure) {
+        return postCommandFailure;
       }
       const readback = getComposerText(element);
       if (readback === null) {
         return "structure-unsupported";
       }
-      return readback === prompt ? "exact" : "text-mismatch";
+      if (readback !== prompt) {
+        return "text-mismatch";
+      }
+      keepCaretInComposer = true;
+      return "exact";
     } catch {
-      return "write-failed";
+      return "composer-write-unconfirmed";
+    } finally {
+      if (!keepCaretInComposer) {
+        clearOwnedSelection();
+      }
     }
   };
 
@@ -693,7 +838,7 @@ export async function runChatGptAdapter(
         ? "composer-input-structure-unsupported"
         : composerWriteCheck === "text-mismatch"
           ? "composer-input-text-mismatch"
-          : "composer-write-unconfirmed";
+          : composerWriteCheck;
     return result(
       "selector-mismatch",
       "composer",

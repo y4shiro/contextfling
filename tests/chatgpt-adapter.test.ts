@@ -19,12 +19,16 @@ type VisibilityState = "visible" | "hidden" | "prerender" | "unloaded";
 
 interface InstalledDom {
   readonly dom: JSDOMType;
+  readonly execCommandCalls: string[];
   readonly cleanup: () => void;
 }
+
+type ExecCommandMode = "insert" | "false" | "throw" | "unavailable";
 
 function installDom(
   markup: string,
   visibilityState: VisibilityState = "visible",
+  execCommandMode: ExecCommandMode = "insert",
 ): InstalledDom {
   const dom = new JSDOM(markup, { url: "https://chatgpt.com/" });
   Object.defineProperty(dom.window.document, "visibilityState", {
@@ -72,6 +76,59 @@ function installDom(
     Event: dom.window.Event,
     getComputedStyle: dom.window.getComputedStyle.bind(dom.window),
   };
+  for (const composer of dom.window.document.querySelectorAll<HTMLElement>(
+    '[contenteditable="true"]',
+  )) {
+    if (!composer.hasAttribute("tabindex")) {
+      // Chromium makes contenteditables focusable; JSDOM needs this fixture hint.
+      composer.tabIndex = 0;
+    }
+  }
+  const execCommandCalls: string[] = [];
+  if (execCommandMode !== "unavailable") {
+    Object.defineProperty(dom.window.document, "execCommand", {
+      configurable: true,
+      value: (command: string, _showUI: boolean, value?: string): boolean => {
+        execCommandCalls.push(command);
+        if (execCommandMode === "throw") {
+          throw new Error("test execCommand failure");
+        }
+        if (execCommandMode === "false") {
+          return false;
+        }
+        if (command !== "insertText" || value === undefined) {
+          return false;
+        }
+        const selection = dom.window.document.getSelection();
+        if (selection?.rangeCount !== 1) {
+          return false;
+        }
+        const range = selection.getRangeAt(0);
+        range.deleteContents();
+        const inserted = dom.window.document.createTextNode(value);
+        range.insertNode(inserted);
+        range.setStartAfter(inserted);
+        range.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        const anchor = range.startContainer;
+        const context =
+          anchor.nodeType === 1 ? (anchor as Element) : anchor.parentElement;
+        const composer = context?.closest<HTMLElement>(
+          '[contenteditable="true"]',
+        );
+        composer?.dispatchEvent(
+          new dom.window.InputEvent("input", {
+            bubbles: true,
+            composed: true,
+            inputType: "insertText",
+            data: value,
+          }),
+        );
+        return true;
+      },
+    });
+  }
   const globalObject = globalThis as unknown as Record<string, unknown>;
   const previous = new Map<
     string,
@@ -91,6 +148,7 @@ function installDom(
 
   return {
     dom,
+    execCommandCalls,
     cleanup: () => {
       if (originalScrollIntoView) {
         Object.defineProperty(
@@ -172,8 +230,10 @@ async function runAutolinkFixture(
     const prompt =
       "Before line\nSee https://example.invalid/context\nAfter line";
     let clickCount = 0;
+    let inputEventCount = 0;
     form.addEventListener("submit", (event) => event.preventDefault());
     composer.addEventListener("input", () => {
+      inputEventCount += 1;
       const update = () => {
         const content = template.content.cloneNode(true) as DocumentFragment;
         const clonedLink = content.querySelector(
@@ -233,6 +293,8 @@ async function runAutolinkFixture(
     return {
       result,
       clickCount,
+      inputEventCount,
+      execCommandCalls: installed.execCommandCalls,
       composerText: composer.textContent ?? "",
     };
   } finally {
@@ -438,6 +500,190 @@ test("現行 home composer は入力後に現れる同一 form の送信ボタ�
   }
 });
 
+test("contenteditable のnative insertTextが使えない・失敗する場合は一度だけ試し送信しない", async () => {
+  for (const mode of ["false", "throw", "unavailable"] as const) {
+    const markup = await readChatGptFixture("home-composer.html");
+    const installed = installDom(markup, "visible", mode);
+    try {
+      const composer = installed.dom.window.document.querySelector(
+        '[data-composer-markdown][contenteditable="true"]',
+      );
+      assert.ok(composer instanceof installed.dom.window.HTMLElement);
+      let inputEventCount = 0;
+      composer.addEventListener("input", () => {
+        inputEventCount += 1;
+      });
+      const result = await runChatGptAdapter(adapterInput());
+
+      assert.equal(result.status, "selector-mismatch", mode);
+      assert.equal(result.attempted, false, mode);
+      assert.equal(
+        result.diagnostics.failureReason,
+        "composer-write-unconfirmed",
+        mode,
+      );
+      assert.equal(composer.textContent, "", mode);
+      assert.equal(inputEventCount, 0, mode);
+      assert.equal(
+        installed.dom.window.document.getSelection()?.rangeCount ?? 0,
+        0,
+        mode,
+      );
+      assert.deepEqual(
+        installed.execCommandCalls,
+        mode === "unavailable" ? [] : ["insertText"],
+        mode,
+      );
+    } finally {
+      installed.cleanup();
+    }
+  }
+});
+
+test("既存のcontenteditable入力を消さず、insertTextを呼ばない", async () => {
+  const markup = await readChatGptFixture("home-composer.html");
+  const installed = installDom(markup);
+  try {
+    const composer = installed.dom.window.document.querySelector(
+      '[data-composer-markdown][contenteditable="true"]',
+    );
+    assert.ok(composer instanceof installed.dom.window.HTMLElement);
+    composer.textContent = "existing text";
+
+    const result = await runChatGptAdapter(adapterInput());
+
+    assert.equal(result.status, "selector-mismatch");
+    assert.equal(result.attempted, false);
+    assert.equal(
+      result.diagnostics.failureReason,
+      "composer-write-unconfirmed",
+    );
+    assert.equal(composer.textContent, "existing text");
+    assert.deepEqual(installed.execCommandCalls, []);
+  } finally {
+    installed.cleanup();
+  }
+});
+
+test("focus後にcomposerが置換・曖昧・非表示ならinsertTextせず停止する", async () => {
+  for (const mode of ["replace", "duplicate", "no-focus", "hide"] as const) {
+    const markup = await readChatGptFixture("home-composer.html");
+    const installed = installDom(markup);
+    try {
+      const composer = installed.dom.window.document.querySelector(
+        '[data-composer-markdown][contenteditable="true"]',
+      );
+      assert.ok(composer instanceof installed.dom.window.HTMLElement);
+      if (mode === "no-focus") {
+        composer.focus = () => undefined;
+      } else {
+        composer.addEventListener(
+          "focus",
+          () => {
+            if (mode === "hide") {
+              Object.defineProperty(
+                installed.dom.window.document,
+                "visibilityState",
+                {
+                  configurable: true,
+                  value: "hidden",
+                },
+              );
+              return;
+            }
+            if (mode === "replace") {
+              const replacement = composer.cloneNode(true);
+              composer.replaceWith(replacement);
+              return;
+            }
+            const form = composer.closest("form");
+            assert.ok(form instanceof installed.dom.window.HTMLFormElement);
+            form.append(composer.cloneNode(true));
+          },
+          { once: true },
+        );
+      }
+
+      const result = await runChatGptAdapter(adapterInput());
+
+      assert.equal(result.status, "selector-mismatch", mode);
+      assert.equal(result.attempted, false, mode);
+      assert.deepEqual(installed.execCommandCalls, [], mode);
+      const expectedFailure = {
+        duplicate: "composer-ambiguous",
+        hide: "document-not-visible",
+        "no-focus": "composer-write-unconfirmed",
+        replace: "composer-detached",
+      }[mode];
+      assert.equal(result.diagnostics.failureReason, expectedFailure, mode);
+    } finally {
+      installed.cleanup();
+    }
+  }
+});
+
+test("composer外のselectionを消さず、範囲外ならinsertTextしない", async () => {
+  for (const mode of ["before-focus", "during-focus"] as const) {
+    const markup = await readChatGptFixture("home-composer.html");
+    const installed = installDom(markup);
+    try {
+      const main = installed.dom.window.document.querySelector("main");
+      const composer = installed.dom.window.document.querySelector(
+        '[data-composer-markdown][contenteditable="true"]',
+      );
+      assert.ok(main instanceof installed.dom.window.HTMLElement);
+      assert.ok(composer instanceof installed.dom.window.HTMLElement);
+      const outside = installed.dom.window.document.createElement("p");
+      outside.textContent = "outside selection";
+      main.prepend(outside);
+      const selection = installed.dom.window.document.getSelection();
+      assert.ok(selection);
+      let originalAnchor: Node | null = null;
+      let originalAnchorOffset = -1;
+      let originalFocus: Node | null = null;
+      let originalFocusOffset = -1;
+      const selectOutside = () => {
+        selection.removeAllRanges();
+        const range = installed.dom.window.document.createRange();
+        range.selectNodeContents(outside);
+        selection.addRange(range);
+        originalAnchor = selection.anchorNode;
+        originalAnchorOffset = selection.anchorOffset;
+        originalFocus = selection.focusNode;
+        originalFocusOffset = selection.focusOffset;
+      };
+      if (mode === "before-focus") {
+        selectOutside();
+      } else {
+        const nativeFocus = composer.focus.bind(composer);
+        composer.focus = () => {
+          nativeFocus();
+          selectOutside();
+        };
+      }
+      const result = await runChatGptAdapter(adapterInput());
+
+      assert.equal(result.status, "selector-mismatch", mode);
+      assert.equal(result.attempted, false, mode);
+      assert.equal(
+        result.diagnostics.failureReason,
+        "composer-write-unconfirmed",
+        mode,
+      );
+      assert.deepEqual(installed.execCommandCalls, [], mode);
+      assert.equal(selection.rangeCount, 1, mode);
+      assert.equal(selection.anchorNode, originalAnchor, mode);
+      assert.equal(selection.anchorOffset, originalAnchorOffset, mode);
+      assert.equal(selection.focusNode, originalFocus, mode);
+      assert.equal(selection.focusOffset, originalFocusOffset, mode);
+      assert.equal(outside.textContent, "outside selection", mode);
+      assert.equal(composer.textContent, "", mode);
+    } finally {
+      installed.cleanup();
+    }
+  }
+});
+
 test("現行 home composer が複数なら入力も送信もしない", async () => {
   const markup = await readChatGptFixture("home-composer.html");
   const installed = installDom(markup);
@@ -510,21 +756,36 @@ test("現行 home form の送信候補が複数なら最初を選ばず送信し
 });
 
 test("generated autolink を同期変換しても全文一致で一度だけ送信する", async () => {
-  const { result, clickCount, composerText } = await runAutolinkFixture("sync");
+  const {
+    result,
+    clickCount,
+    inputEventCount,
+    execCommandCalls,
+    composerText,
+  } = await runAutolinkFixture("sync");
 
   assert.equal(result.status, "sent");
   assert.equal(result.attempted, true);
   assert.equal(clickCount, 1);
+  assert.equal(inputEventCount, 1);
+  assert.deepEqual(execCommandCalls, ["insertText"]);
   assert.equal(composerText, "");
 });
 
 test("generated autolink をmicrotask変換しても全文一致で一度だけ送信する", async () => {
-  const { result, clickCount, composerText } =
-    await runAutolinkFixture("microtask");
+  const {
+    result,
+    clickCount,
+    inputEventCount,
+    execCommandCalls,
+    composerText,
+  } = await runAutolinkFixture("microtask");
 
   assert.equal(result.status, "sent");
   assert.equal(result.attempted, true);
   assert.equal(clickCount, 1);
+  assert.equal(inputEventCount, 1);
+  assert.deepEqual(execCommandCalls, ["insertText"]);
   assert.equal(composerText, "");
 });
 
@@ -538,10 +799,8 @@ test("generated autolink のmarker・リンク値・icon・構造が不正なら
     "nonempty-icon",
   ];
   for (const mutation of mutations) {
-    const { result, clickCount, composerText } = await runAutolinkFixture(
-      "sync",
-      mutation,
-    );
+    const { result, clickCount, execCommandCalls, composerText } =
+      await runAutolinkFixture("sync", mutation);
 
     assert.equal(result.status, "selector-mismatch", mutation);
     assert.equal(result.phase, "composer", mutation);
@@ -552,6 +811,7 @@ test("generated autolink のmarker・リンク値・icon・構造が不正なら
     );
     assert.equal(result.attempted, false, mutation);
     assert.equal(clickCount, 0, mutation);
+    assert.deepEqual(execCommandCalls, ["insertText"], mutation);
     assert.notEqual(composerText, "", mutation);
   }
 });

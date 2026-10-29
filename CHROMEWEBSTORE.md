@@ -114,7 +114,7 @@ DOM 失敗時には、bounded failure に限り同意済みの prompt を clipbo
 
 | バージョン | 日付 | 変更 | 状態 |
 | --- | --- | --- | --- |
-| Unreleased（Issue #24 修正候補 v0.1.1） | 2026-10-06 | 現行 ChatGPT Web の新規会話 composer／送信ボタンと、generated autolink の厳密な読み戻しに対応。非機密 DOM fixture と自動検証は通過。2026-10-29 の Chrome 156 実機は FAIL。停止理由を区別する固定診断を追加し調査継続。 | Draft PR #25 / CWS未公開 |
+| Unreleased（Issue #24 修正候補 v0.1.1） | 2026-10-06 | 現行 ChatGPT Web の新規会話 composer／送信ボタンと、generated autolink の厳密な読み戻しに対応。非機密 DOM fixture と自動検証は通過。2026-10-29 の Chrome 156 実機は FAIL。固定診断で入力後の文字不一致を確認し、contenteditable への単回ブラウザー編集候補を追加。実機復旧は未確認。 | Draft PR #25 / CWS未公開 |
 | Unreleased（現行ソース v0.1.1） | 2026-08-27 / 2026-08-28 | ChatGPT handoff の失敗経路、ProseMirror composer readback、単回 clipboard fallback、optional permission 撤回後の個別確認を修正。ADR 0003 で foreground-only を採択。Chrome 151 で permission / consent smoke と Issue #6 の selection/status URL、page URL fallback、foreground target、旧保存値無視、target close、logged-out clipboard success banner を確認。88 tests で補完。 | 現行ソース（公開 ZIP 未反映） / CWS未公開 |
 | 0.1.1 | 2026-08-24 | `about:blank` 完了イベント race を修正。Chrome 実機で X→ChatGPT 自動送信成功を確認。42 tests。 | GitHub Experimental prerelease（公開 ZIP） / CWS未公開 |
 | 0.1.0 | 2026-08-24 | X selection、preview / consent、ChatGPT Web Experimental handoff、clipboard fallback、設定画面、最小権限 Manifest を実装。 | Deprecated（`about:blank` 完了イベント race 既知） / CWS未公開 |
