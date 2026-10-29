@@ -145,6 +145,16 @@ adapter は実測した marker span、単一 wrapper、空の hidden/noneditable
 
 合成値の fixture で、同期／microtask の変換は修正前 FAIL、修正後 PASS。marker 欠落、リンク属性の不一致、editable／未知／非空 icon では送信せず、送信後も装飾済み composer が残る場合は一回の click 後に send-unknown となることを確認しました。親の直接 review 後、実測に合わせた fixture の label／装飾形状と editable icon の拒否を補い、95 tests、lint、typecheck、build、diff check が通過しました。修正 build の実機確認は未完了です。
 
+## PR #25 修正後 build の単回実機 smoke（2026-10-29）
+
+結果は FAIL です。Human が Chrome `156.0.8078.48` で `/tmp/contextfling-pr25-6d41bfa-20261029/unpacked` の読み込み完了を回答し、非機密の X selection menu を一回実行しました。検証 source commit は `6d41bfa6f7a511ac6bb459fab8715df1dcfeb2cf`、Manifest version は `0.1.1` です。現 HEAD の source から再生成した build と読み込み用フォルダの全7ファイルが一致し、Service Worker bundle SHA-256 は `fa67f3641e304ef0a15464fbc0d171055d2bcf90fac4a01ba89d1e92c648511b` でした。
+
+ツールは操作前の tab ID と比較し、新規 ChatGPT target が一つであることを確認しました。その target の本文領域では user message 0件、assistant message 0件でした。最初の観察で composer は空、その後の観察では非空となり、拡張所有の clipboard-copied banner が表示されました。5秒以上経過後も新規 target は一つ、user message 0件でした。追加の貼り付け・送信・再実行は行っていません。追加 target／二重送信は観察されませんでしたが、内部の全 attempt 履歴を監査したものではありません。
+
+残留 composer は現 registry の home selector に一致し、関連 form 内には enabled／visible な日本語 submit control が一つありました。generated autolink は既存修正の marker、単一 wrapper、空の hidden/noneditable icon と単一 text node の形状に一致しました。属性名・構造・真偽値だけを取得し、実入力、リンク値、会話URL、私的 sidebar、account、clipboard 内容、Cookie、token、auth state は取得・公開していません。
+
+Human は Service Worker の診断ログが残っていないことを確認しました。観察時の DOM が一致していても実行時の全文一致や readiness は証明できないため、failure reason は未確定です。入力直後／送信直前のそれぞれで、読み戻せない構造と全文の文字不一致を固定 enum で区別する診断を追加しました。write 例外は従来の composer-write-unconfirmed とし、本文・URL・長さなどの値を診断に含めません。96 tests、lint、typecheck、build、secret scan、diff check を確認し、その変更後の build で独立した単回確認を行う準備を進めます。実機成功は引き続き未確認です。
+
 ## 記録フォーマット
 
 ```text

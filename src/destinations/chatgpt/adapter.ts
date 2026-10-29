@@ -30,6 +30,10 @@ export type ChatGptAdapterFailureReason =
   | "composer-ambiguous"
   | "composer-detached"
   | "composer-write-unconfirmed"
+  | "composer-input-structure-unsupported"
+  | "composer-input-text-mismatch"
+  | "composer-presend-structure-unsupported"
+  | "composer-presend-text-mismatch"
   | "container-not-found"
   | "send-not-found"
   | "send-ambiguous"
@@ -510,7 +514,10 @@ export async function runChatGptAdapter(
     return null;
   };
 
-  const fillComposer = (element: Element, prompt: string): boolean => {
+  const fillComposer = (
+    element: Element,
+    prompt: string,
+  ): "exact" | "structure-unsupported" | "text-mismatch" | "write-failed" => {
     try {
       element.scrollIntoView({ block: "center", inline: "nearest" });
       element.dispatchEvent(new FocusEvent("focus", { bubbles: false }));
@@ -549,11 +556,15 @@ export async function runChatGptAdapter(
         );
         element.dispatchEvent(new Event("change", { bubbles: true }));
       } else {
-        return false;
+        return "write-failed";
       }
-      return getComposerText(element) === prompt;
+      const readback = getComposerText(element);
+      if (readback === null) {
+        return "structure-unsupported";
+      }
+      return readback === prompt ? "exact" : "text-mismatch";
     } catch {
-      return false;
+      return "write-failed";
     }
   };
 
@@ -675,13 +686,20 @@ export async function runChatGptAdapter(
     return prefillVisibilityFailure;
   }
 
-  if (!fillComposer(composer, input.prompt)) {
+  const composerWriteCheck = fillComposer(composer, input.prompt);
+  if (composerWriteCheck !== "exact") {
+    const failureReason: ChatGptAdapterFailureReason =
+      composerWriteCheck === "structure-unsupported"
+        ? "composer-input-structure-unsupported"
+        : composerWriteCheck === "text-mismatch"
+          ? "composer-input-text-mismatch"
+          : "composer-write-unconfirmed";
     return result(
       "selector-mismatch",
       "composer",
       false,
       "入力欄への標準 DOM event による入力に失敗しました。",
-      "composer-write-unconfirmed",
+      failureReason,
     );
   }
 
@@ -792,13 +810,16 @@ export async function runChatGptAdapter(
       "composer-detached",
     );
   }
-  if (getComposerText(composer) !== input.prompt) {
+  const composerReadback = getComposerText(composer);
+  if (composerReadback !== input.prompt) {
     return result(
       "selector-mismatch",
       "composer",
       false,
       "送信直前に入力欄の状態を確認できませんでした。",
-      "composer-write-unconfirmed",
+      composerReadback === null
+        ? "composer-presend-structure-unsupported"
+        : "composer-presend-text-mismatch",
     );
   }
 

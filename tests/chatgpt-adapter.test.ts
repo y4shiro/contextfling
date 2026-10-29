@@ -547,7 +547,7 @@ test("generated autolink のmarker・リンク値・icon・構造が不正なら
     assert.equal(result.phase, "composer", mutation);
     assert.equal(
       result.diagnostics.failureReason,
-      "composer-write-unconfirmed",
+      "composer-input-structure-unsupported",
       mutation,
     );
     assert.equal(result.attempted, false, mutation);
@@ -740,7 +740,7 @@ test("contenteditable の readback が一文字でも変われば送信しない
     assert.equal(result.status, "selector-mismatch");
     assert.equal(
       result.diagnostics.failureReason,
-      "composer-write-unconfirmed",
+      "composer-presend-text-mismatch",
     );
     assert.equal(result.attempted, false);
     assert.equal(clickCount, 0);
@@ -804,7 +804,7 @@ test("contenteditable に予期しない構造が入った場合は一致扱い�
     assert.equal(result.status, "selector-mismatch");
     assert.equal(
       result.diagnostics.failureReason,
-      "composer-write-unconfirmed",
+      "composer-presend-structure-unsupported",
     );
     assert.equal(result.attempted, false);
     assert.equal(clickCount, 0);
@@ -1012,11 +1012,65 @@ test("controlled input が DOM 書き込みを反映しない場合は click し
     assert.equal(result.attempted, false);
     assert.equal(
       result.diagnostics.failureReason,
-      "composer-write-unconfirmed",
+      "composer-input-text-mismatch",
     );
     assert.equal(clickCount, 0);
   } finally {
     installed.cleanup();
+  }
+});
+
+test("送信直前の読み戻し失敗は構造と文字列を区別し、clickしない", async () => {
+  for (const mode of ["unsupported", "mismatch"] as const) {
+    const markup = await readChatGptFixture("home-composer.html");
+    const installed = installDom(markup);
+    try {
+      const composer = installed.dom.window.document.querySelector(
+        '[data-composer-markdown][contenteditable="true"]',
+      );
+      const form = composer?.closest("form");
+      assert.ok(composer instanceof installed.dom.window.HTMLElement);
+      assert.ok(form instanceof installed.dom.window.HTMLFormElement);
+      const sendButton = installed.dom.window.document.createElement("button");
+      sendButton.type = "submit";
+      sendButton.setAttribute("aria-label", "送信");
+      form.append(sendButton);
+      assert.ok(sendButton instanceof installed.dom.window.HTMLButtonElement);
+
+      composer.addEventListener("input", () => {
+        queueMicrotask(() => {
+          if (mode === "mismatch") {
+            composer.textContent = "changed text";
+            return;
+          }
+          const paragraph = installed.dom.window.document.createElement("p");
+          const unknown = installed.dom.window.document.createElement("span");
+          unknown.textContent = "changed structure";
+          paragraph.append(unknown);
+          composer.replaceChildren(paragraph);
+        });
+      });
+
+      let clickCount = 0;
+      sendButton.addEventListener("click", () => {
+        clickCount += 1;
+      });
+
+      const result = await runChatGptAdapter(adapterInput());
+
+      assert.equal(result.status, "selector-mismatch", mode);
+      assert.equal(result.attempted, false, mode);
+      assert.equal(
+        result.diagnostics.failureReason,
+        mode === "unsupported"
+          ? "composer-presend-structure-unsupported"
+          : "composer-presend-text-mismatch",
+        mode,
+      );
+      assert.equal(clickCount, 0, mode);
+    } finally {
+      installed.cleanup();
+    }
   }
 });
 
