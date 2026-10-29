@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="ja">
+  <body>
+    <main>
+      <form data-chatgpt-composer data-composer-placement="home">
+        <!-- biome-ignore lint/a11y/useFocusableInteractive lint/a11y/useSemanticElements: fixture mirrors the observed ChatGPT contenteditable DOM -->
+        <div
+          contenteditable="true"
+          role="textbox"
+          data-composer-markdown
+          aria-label="ChatGPT に聞く"
+        ></div>
+        <template data-fixture="generated-autolink">
+          <p>Before line
+See <span data-rich-text-generated-autolink text-link-href="https://example.invalid/context"><span><span data-inline-url-icon aria-hidden="true" contenteditable="false"><span contenteditable="false"><svg aria-hidden="true"><path d="M0 0"></path></svg></span><span></span></span>https://example.invalid/context</span></span>
+After line</p>
+        </template>
+      </form>
+    </main>
+  </body>
+</html>
